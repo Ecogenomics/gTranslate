@@ -17,14 +17,14 @@
 
 
 class GTranslateException(Exception):
-    """ Base exception for all GTranslate exceptions thrown in this project. """
+    """ Base exception for all gTranslate exceptions thrown in this project. """
 
     def __init__(self, message=''):
         Exception.__init__(self, message)
 
 
 class GTranslateExit(Exception):
-    """Raised when GTranslate is to quietly exit."""
+    """Raised when gTranslate is to quietly exit."""
 
     def __init__(self, message=''):
         Exception.__init__(self, message)
@@ -93,7 +93,7 @@ class ProdigalException(GTranslateException):
         GTranslateException.__init__(self, message)
 
 class GTranslateTestFailure(GTranslateException):
-    """ Thrown when the GTranslate user test suite fails. """
+    """ Thrown when the gTranslate user test suite fails. """
 
     def __init__(self, message=''):
         GTranslateException.__init__(self, message)

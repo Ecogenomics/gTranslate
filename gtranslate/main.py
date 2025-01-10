@@ -185,7 +185,7 @@ class OptionsParser(object):
         if options.subparser_name == 'detect_table':
             self.detect_table(options)
         else:
-            self.logger.error('Unknown GTranslate command: "' +
+            self.logger.error('Unknown gTranslate command: "' +
                               options.subparser_name + '"\n')
             sys.exit(1)
 

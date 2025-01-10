@@ -30,7 +30,7 @@ from gtranslate.main import OptionsParser
 def print_help():
     print('''\
 
-              ...::: GTranslate v%s :::...
+              ...::: gTranslate v%s :::...
 
   Tools:
     detect_table  -> Detect the genetic translation table (GTT) used in prokaryotic organisms.
@@ -61,7 +61,7 @@ def main():
 
     # setup logger
     logger_setup(args.out_dir if hasattr(args, 'out_dir') and args.out_dir else None,
-                 "gtranslate.log", "GTranslate", __version__, False,
+                 "gtranslate.log", "gTranslate", __version__, False,
                  hasattr(args, 'debug') and args.debug)
     logger = logging.getLogger('timestamp')
 
