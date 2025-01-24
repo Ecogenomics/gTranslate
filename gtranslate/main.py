@@ -30,6 +30,7 @@ from tqdm import tqdm
 from gtranslate.biolib_lite.common import remove_extension, check_dir_exists, check_file_exists, make_sure_path_exists
 from gtranslate.exceptions import GTranslateExit
 from gtranslate.files.batchfile import Batchfile
+from gtranslate.tbl_predictor import TablePredictor
 
 
 class OptionsParser(object):
@@ -45,7 +46,6 @@ class OptionsParser(object):
         self.logger = logging.getLogger('timestamp')
         self.warnings = logging.getLogger('warnings')
         self.version = version
-        self._check_package_compatibility()
 
         self.genomes_to_process = None
 
@@ -63,6 +63,35 @@ class OptionsParser(object):
         if ' ' in file_path:
             raise GTranslateExit(f'The genome path contains a space, this is '
                              f'unsupported by downstream applications: {file_path}')
+        return True
+
+    def _verify_genome_id(self, genome_id: str) -> bool:
+        """Ensure genome ID will be valid in Newick tree.
+
+        Parameters
+        ----------
+        genome_id : str
+            The string representing the genome identifier.
+
+        Returns
+        -------
+        bool
+            True if the genome identifier is legal.
+
+        Raises
+        ------
+        GTDBTkExit
+            If the genome identifier contains illegal characters.
+        """
+        if len(genome_id) == 0:
+            raise GTranslateExit('Genome name cannot be blank, check for input files '
+                             'without a name, or empty columns in the batchfile.')
+        invalid_chars = frozenset('()[],;= ')
+        if any((c in invalid_chars) for c in genome_id):
+            self.logger.error(f'Invalid genome ID: {genome_id}')
+            self.logger.error(f'The following characters are invalid: '
+                              f'{" ".join(invalid_chars)}')
+            raise GTranslateExit(f'Invalid genome ID: {genome_id}')
         return True
 
     def _genomes_to_process(self, genome_dir, batchfile, extension):
@@ -83,7 +112,7 @@ class OptionsParser(object):
             Map of genomes to their genomic FASTA files.
         """
 
-        genomic_files, tln_tables = dict(), dict()
+        genomic_files = dict()
         if genome_dir:
             for f in os.listdir(genome_dir):
                 if f.endswith(extension):
@@ -92,7 +121,7 @@ class OptionsParser(object):
 
         elif batchfile:
             batchfile_fh = Batchfile(batchfile)
-            genomic_files, tln_tables = batchfile_fh.genome_path, batchfile_fh.genome_tln
+            genomic_files = batchfile_fh.genome_path
 
         # Check that all of the genome IDs are valid.
         for genome_key in genomic_files:
@@ -129,9 +158,9 @@ class OptionsParser(object):
                                   'check the format of this file.' % batchfile)
             raise GTranslateExit
 
-        return genomic_files, tln_tables
+        return genomic_files
 
-    def detect_table(self, options ):
+    def detect_table(self, options):
         """Detect the genetic translation table (GTT) used in prokaryotic organisms.
 
         Parameters
@@ -149,9 +178,15 @@ class OptionsParser(object):
 
         make_sure_path_exists(options.out_dir)
 
-        genomes, tln_tables = self._genomes_to_process(options.genome_dir,
+        genomes = self._genomes_to_process(options.genome_dir,
                                                        options.batchfile,
                                                        options.extension)
+
+        table_predictor = TablePredictor(options.cpus)
+        reports = table_predictor.predict(genomes,
+                         options.out_dir,
+                         options.prefix,
+                         options.force)
 
         self.logger.info('Done.')
 

@@ -22,6 +22,7 @@ __license__ = 'GPL3'
 __maintainer__ = 'Donovan Parks'
 __email__ = 'donovan.parks@gmail.com'
 
+import itertools
 import logging
 import ntpath
 import os
@@ -30,12 +31,15 @@ import subprocess
 import tempfile
 from collections import defaultdict, namedtuple
 
+import joblib
 import numpy as np
+import pandas as pd
 
 from .common import remove_extension, make_sure_path_exists, check_file_exists
 from .execute import check_on_path
 from .parallel import Parallel
 from .seq_io import read_fasta, write_fasta
+from ..classifiers.table_classifiers import Classifier_4_11
 
 
 class Prodigal(object):
@@ -76,6 +80,9 @@ class Prodigal(object):
 
         best_translation_table = -1
         table_coding_density = {4: -1, 11: -1}
+        kmer_signature = defaultdict(dict)
+        aa_frequency = defaultdict(dict)
+        gc_percentage = defaultdict()
         if self.called_genes:
             os.system('cp %s %s' %
                       (os.path.abspath(genome_file), aa_gene_file))
@@ -164,15 +171,88 @@ class Prodigal(object):
                         codingBases += prodigalParser.coding_bases(seq_id)
 
                     codingDensity = float(codingBases) / total_bases
-                    table_coding_density[translation_table] = codingDensity
+                    table_coding_density[translation_table] = codingDensity * 100
+
+                    ksignature = GenomicSignatures(4, threads=1)
+                    kmer_signature[translation_table] = ksignature.calculate(nt_gene_file_tmp)
+                    aa_frequency[translation_table] = ksignature.calculate_aa_frequency(aa_gene_file_tmp)
+                    # for GC percentage we only count the ATCG bases and not the N
+                    gc_percentage[translation_table] = ksignature.calculate_gc_content(seqs)
+
+
+                    #gc_percentage[translation_table] = round((seqs[seq_id].count('G') + seqs[seq_id].count('C')) / len(seqs[seq_id]) * 100, 4)
+
 
                 # determine best translation table
-                if not self.translation_table:
-                    best_translation_table = 11
-                    if (table_coding_density[4] - table_coding_density[11] > 0.05) and table_coding_density[4] > 0.7:
-                        best_translation_table = 4
-                else:
-                    best_translation_table = self.translation_table
+                # create a numpy array to store all the information for a genome in the same order as the classifiers
+                aa_list = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V',
+                           'W', 'Y']
+
+                # Generate all possible combinations of 4 characters using 'A', 'C', 'G', 'T'
+                tetra_list = [''.join(tetra) for tetra in itertools.product('ACGT', repeat=4)]
+
+                difference_tetra = defaultdict()
+                for tetra in tetra_list:
+                    difference_tetra[tetra+'_diff']=kmer_signature.get(11).get(tetra)- kmer_signature.get(4).get(tetra)
+
+                difference_aa = defaultdict()
+                for aa in aa_list:
+                    difference_aa[aa+'_diff']=aa_frequency.get(11).get(aa) - aa_frequency.get(4).get(aa)
+
+                # # create a numpy array to store all the information for a genome in the same order as the classifiers
+                # genome_info = np.array([table_coding_density[4], table_coding_density[11],table_coding_density[11] -table_coding_density[4],
+                #                         gc_percentage[11]])
+                # genome_info = np.append(genome_info, difference_tetra)
+                # genome_info = np.append(genome_info, difference_aa)
+
+                # create a dataframe to store the genome information with columns in the same order as the classifiers
+                # get columns from the scaler
+                temp_df = pd.DataFrame( columns = ['GC', 'Coding_density_4','Coding_density_11','cd11_cd4_delta'])
+                temp_df['Coding_density_4'] = [table_coding_density[4]]
+                temp_df['Coding_density_11'] = [table_coding_density[11]]
+                temp_df['cd11_cd4_delta'] = [table_coding_density[11] - table_coding_density[4]]
+                temp_df['GC'] = [gc_percentage[11]]
+                #we add the difference tetra
+                temp_df = pd.concat([temp_df, pd.DataFrame(difference_tetra, index=[0])], axis=1)
+                #we add the difference aa
+                temp_df = pd.concat([temp_df, pd.DataFrame(difference_aa, index=[0])], axis=1)
+
+                classifier_4_11 = Classifier_4_11()
+                best_translation_table = classifier_4_11.get_translation_table(temp_df)[0]
+
+
+                # # Load the Scaler
+                # cwd = os.getcwd()
+                # scaler = joblib.load('gtranslate/biolib_lite/classifiers_model/scaler_4_11.pkl')
+                #
+                # # make sure temp_df has the same columns as the scaler
+                # temp_df = temp_df.reindex(columns=scaler.feature_names_in_, fill_value=0)
+                #
+                #
+                # # transform the genome info
+                # temp_df_scaled = scaler.transform(temp_df)
+                #
+                # # Convert the scaled array back into a DataFrame with the original column names
+                # temp_df_scaled = pd.DataFrame(temp_df_scaled, columns=temp_df.columns, index=temp_df.index)
+                #
+                # # Load the classifiers
+                # classifiers = joblib.load('gtranslate/biolib_lite/classifiers_model/ada_4_11.pkl')
+                # # predict the translation table
+                # # make sure temp_df has the same columns as the scaler
+                # #temp_df_scaled = temp_df_scaled.reindex(columns=classifiers.feature_names_in_, fill_value=0)
+                # best_translation_table = classifiers.predict(temp_df_scaled)[0]
+                # if best_translation_table == 0:
+                #     best_translation_table = 4
+                # else:
+                #     best_translation_table = 11
+
+                #self.logger.info('Best translation table for {}: {}'.format(genome_id, best_translation_table))
+
+
+                #best_translation_table = 11
+                # if (table_coding_density[4] - table_coding_density[11] > 0.05) and table_coding_density[4] > 0.7:
+                #     best_translation_table = 4
+
 
                 shutil.copyfile(os.path.join(tmp_dir, str(best_translation_table),
                                              genome_id + '_genes.faa'), aa_gene_file)
@@ -420,3 +500,118 @@ class ProdigalGeneFeatureParser(object):
             end = self.last_coding_base[seq_id]
 
         return np.sum(self.coding_base_masks[seq_id][start:end])
+
+class GenomicSignatures(object):
+    def __init__(self, K, threads =1):
+        self.K = K
+        self.kmerCols, self.kmerToCanonicalIndex = self.makeKmerColNames()
+        self.totalThreads = threads
+
+    def makeKmerColNames(self):
+        """Work out unique kmers."""
+
+        # determine all mers of a given length
+        baseWords = ("A", "C", "G", "T")
+        mers = ["A", "C", "G", "T"]
+        for _ in range(1, self.K):
+            workingList = []
+            for mer in mers:
+                for char in baseWords:
+                    workingList.append(mer + char)
+            mers = workingList
+
+        # pare down kmers based on lexicographical ordering
+        retList = []
+        for mer in mers:
+            if mer not in retList:
+                retList.append(mer)
+
+        sorted(retList)
+
+        # create mapping from kmers to their canonical order position
+        kmerToCanonicalIndex = {}
+        for index, kmer in enumerate(retList):
+            kmerToCanonicalIndex[kmer] = index
+
+        return retList, kmerToCanonicalIndex
+
+    def calculate(self, seqFile):
+        """Calculate genomic signature of each sequence."""
+
+        # process each sequence in parallel
+        list_jobs = []
+
+        seqs = read_fasta(seqFile)
+        codon_usage = self.seqSignature(seqs)
+        return codon_usage
+
+    def calculate_aa_frequency(self, seqFile):
+
+        # Calculating amino acid frequency in gene calling files
+        seqs = read_fasta(seqFile)
+        aa_freq = self.aa_frequency(seqs)
+        return aa_freq
+
+
+    def seqSignature(self, seqs):
+        sig = [0] * len(self.kmerCols)
+
+        for seqid,seq in seqs.items():
+            tmp_seq = seq.upper()
+
+            numMers = len(tmp_seq) - self.K + 1
+            for i in range(0, numMers):
+                try:
+                    kmerIndex = self.kmerToCanonicalIndex[tmp_seq[i:i + self.K]]
+                    sig[kmerIndex] += 1  # Note: a numpy array would be slow here due to this single element increment
+                except KeyError:
+                    # unknown kmer (e.g., contains a N)
+                    pass
+        # normalize
+        sig = np.array(sig, dtype=float)
+        if np.sum(sig) != 0 :
+            sig /= np.sum(sig)
+        # convert to list
+        sig = list(sig)
+        # multiply by 100 and round to 2 decimal places
+        sig = [round(i*100,4) for i in sig]
+        # convert sig to dictionary
+        sig = dict(zip(self.kmerCols, sig))
+
+        return sig
+
+    def aa_frequency(self, seqs):
+        standard_amino_acids = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
+        aa_freq = {aa: 0 for aa in standard_amino_acids}
+        for seqid, seq in seqs.items():
+            for aa in seq:
+                if aa in aa_freq:
+                    aa_freq[aa] += 1
+        # normalize
+        total_aa = sum(aa_freq.values())
+        if total_aa != 0 :
+            aa_freq = {aa: freq/total_aa for aa, freq in aa_freq.items()}
+        # multiply by 100 and round to 2 decimal places
+        aa_freq = {aa: round(freq*100, 4) for aa, freq in aa_freq.items()}
+        return aa_freq
+
+    def calculate_gc_content(self,seq_dict):
+        """
+        Calculate the combined GC content across all sequences in a dictionary.
+
+        Args:
+            seq_dict (dict): A dictionary where keys are sequence IDs and values are sequences.
+
+        Returns:
+            float: The combined GC content percentage across all sequences.
+        """
+        gc_count = 0
+        total_count = 0
+
+        for sequence in seq_dict.values():
+            # Filter out non-ATCG characters
+            filtered_seq = [base for base in sequence if base in 'ATCG']
+            gc_count += filtered_seq.count('G') + filtered_seq.count('C')
+            total_count += len(filtered_seq)
+
+        return (gc_count / total_count * 100) if total_count > 0 else 0

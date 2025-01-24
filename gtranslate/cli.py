@@ -40,12 +40,24 @@ def __cpus(group):
     group.add_argument('--cpus', default=1, type=int,
                        help='number of CPUs to use')
 
+def __force(group):
+    group.add_argument('--force', action='store_true', default=False,
+                       help='continue processing if an error occurs on a single genome')
+
 def __help(group):
     group.add_argument('-h', '--help', action="help", help="show help message")
 
 def __keep_called_genes(group):
-    group.add_argument('--keep_intermediates', default=False, action='store_true',
+    group.add_argument('--keep_called_genes', default=False, action='store_true',
                        help='keep genes called with the right Translation table.')
+
+def __extension(group):
+    group.add_argument('-x', '--extension', type=str, default='fna',
+                       help='extension of files to process, ``gz`` = gzipped')
+
+def __prefix(group):
+    group.add_argument('--prefix', type=str, default='gtranslate',
+                       help='prefix for all output files')
 
 def __temp_dir(group):
     group.add_argument('--tmpdir', action=ChangeTempAction, default=tempfile.gettempdir(),
@@ -65,7 +77,10 @@ def get_main_parser():
         with arg_group(parser, 'required named arguments') as grp:
             __out_dir(grp, required=True)
         with arg_group(parser, 'optional arguments') as grp:
+            __extension(grp)
             __cpus(grp)
             __keep_called_genes(grp)
+            __prefix(grp)
+            __force(grp)
 
     return main_parser

@@ -23,6 +23,7 @@ import sys
 
 from tqdm import tqdm
 
+from gtranslate.config.common import CONFIG
 from .common import make_sure_path_exists
 
 
