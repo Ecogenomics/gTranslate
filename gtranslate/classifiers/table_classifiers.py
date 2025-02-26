@@ -25,7 +25,11 @@ class GenericTableClassifier:
     def classify_table(self, data : pd.DataFrame):
         """Classify the table using the classifier."""
         classifier = joblib.load(self.classifier_path)
-        return classifier.predict(data)
+        print(classifier)
+        # The classifier is train on a specific subset of columns so we need to make sure the data has the same columns
+        print(classifier.feature_names_in_)
+        trimmed_data = data.reindex(columns=classifier.feature_names_in_, fill_value=0)
+        return classifier.predict(trimmed_data)
 
     def scale_and_classify(self, data : pd.DataFrame):
         """Scale and classify the data."""
@@ -44,6 +48,7 @@ class Classifier_4_11(GenericTableClassifier):
         """Get the translation table for the list of genomes."""
         binary_value=self.scale_and_classify(data)
         # convert the list to 4 or 11
+        # to keep a standard the TT with the majority of values will be 1 and the other 0
         return [4 if value == 0 else 11 for value in binary_value]
 
 class Classifier_25(GenericTableClassifier):
@@ -58,6 +63,7 @@ class Classifier_25(GenericTableClassifier):
         """Get the translation table for the list of genomes."""
         binary_value=self.scale_and_classify(data)
         # convert the list to 25 or 4
-        return [25 if value == 1 else 4 for value in binary_value]
+        # to keep a standard the TT with the majority of values will be 1 and the other 0
+        return [25 if value == 0 else 4 for value in binary_value]
 
 

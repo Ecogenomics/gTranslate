@@ -39,7 +39,9 @@ from .common import remove_extension, make_sure_path_exists, check_file_exists
 from .execute import check_on_path
 from .parallel import Parallel
 from .seq_io import read_fasta, write_fasta
-from ..classifiers.table_classifiers import Classifier_4_11
+from ..classifiers.table_classifiers import Classifier_4_11, Classifier_25
+from gtranslate.config.common import CONFIG
+from ..external.jellyfish import Jellyfish
 
 
 class Prodigal(object):
@@ -80,9 +82,8 @@ class Prodigal(object):
 
         best_translation_table = -1
         table_coding_density = {4: -1, 11: -1}
-        kmer_signature = defaultdict(dict)
+        kmer_gene_signature = defaultdict(dict)
         aa_frequency = defaultdict(dict)
-        gc_percentage = defaultdict()
         if self.called_genes:
             os.system('cp %s %s' %
                       (os.path.abspath(genome_file), aa_gene_file))
@@ -96,6 +97,7 @@ class Prodigal(object):
                 genome_id, aa_gene_file, nt_gene_file, gff_file, best_translation_table, table_coding_density[4],
                 table_coding_density[11], True)
 
+            ksignature = GenomicSignatures(4, threads=1)
             with tempfile.TemporaryDirectory('gtranslate_prodigal_tmp_') as tmp_dir:
 
                 # determine number of bases
@@ -108,61 +110,10 @@ class Prodigal(object):
 
                 for translation_table in translation_tables:
                     os.makedirs(os.path.join(tmp_dir, str(translation_table)))
-                    aa_gene_file_tmp = os.path.join(tmp_dir, str(
-                        translation_table), genome_id + '_genes.faa')
-                    nt_gene_file_tmp = os.path.join(tmp_dir, str(
-                        translation_table), genome_id + '_genes.fna')
-                    gff_file_tmp = os.path.join(tmp_dir, str(
-                        translation_table), genome_id + '.gff')
-
-                    # check if there is sufficient bases to calculate prodigal
-                    # parameters
-                    if total_bases < 100000 or self.meta:
-                        proc_str = 'meta'  # use best pre-calculated parameters
-                    else:
-                        proc_str = 'single'  # estimate parameters from data
-
-                    # If this is a gzipped genome, re-write the uncompressed genome
-                    # file to disk
-                    prodigal_input = genome_file
-                    if genome_file.endswith('.gz'):
-                        prodigal_input = os.path.join(
-                            tmp_dir, os.path.basename(genome_file[0:-3]) + '.fna')
-                        write_fasta(seqs, prodigal_input)
-
-                    # there may be ^M character in the input file,
-                    # the following code is similar to dos2unix command to remove
-                    # those special characters.
-                    with open(prodigal_input, 'r') as fh:
-                        text = fh.read().replace('\r\n', '\n')
-                    processed_prodigal_input = os.path.join(
-                        tmp_dir, os.path.basename(prodigal_input))
-                    with open(processed_prodigal_input, 'w') as fh:
-                        fh.write(text)
-
-                    args = '-m'
-                    if self.closed_ends:
-                        args += ' -c'
-
-
-                    cmd = ['prodigal',args,'-p',proc_str,'-q',
-                           '-f','gff','-g',str(translation_table),
-                           '-a',aa_gene_file_tmp,'-d',nt_gene_file_tmp,
-                           '-i',processed_prodigal_input,'-o',gff_file_tmp]
-
-                    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                            stderr=subprocess.PIPE, encoding='utf-8')
-
-                    stdout, stderr = proc.communicate()
-                    #This extra step has been added for the issue 451 where Prodigal can return a free pointer error
-                    if proc.returncode != 0:
-                        self.logger.warning('Error running Prodigal on genome: '
-                                            '{}'.format(genome_file))
-                        self.logger.warning('Error message:')
-                        for line in stderr.splitlines():
-                            print(line)
-                        self.logger.warning('This genome is skipped.')
-
+                    aa_gene_file_tmp, nt_gene_file_tmp, gff_file_tmp,processed_prodigal_input = self.run_prodigal_command(translation_table,
+                                                                                                 tmp_dir, genome_id,
+                                                                                                 genome_file, seqs,
+                                                                                                 total_bases)
                     # determine coding density
                     prodigalParser = ProdigalGeneFeatureParser(gff_file_tmp)
 
@@ -172,38 +123,12 @@ class Prodigal(object):
 
                     codingDensity = float(codingBases) / total_bases
                     table_coding_density[translation_table] = codingDensity * 100
-
-                    ksignature = GenomicSignatures(4, threads=1)
-                    kmer_signature[translation_table] = ksignature.calculate(nt_gene_file_tmp)
-                    aa_frequency[translation_table] = ksignature.calculate_aa_frequency(aa_gene_file_tmp)
+                    aa_frequency[translation_table] = ksignature.calculate_aa_frequency(aa_gene_file_tmp,translation_table)
+                    # calculate kmer signature for the genes
+                    kmer_gene_signature[translation_table] = ksignature.calculate(nt_gene_file_tmp,translation_table)
                     # for GC percentage we only count the ATCG bases and not the N
-                    gc_percentage[translation_table] = ksignature.calculate_gc_content(seqs)
-
-
-                    #gc_percentage[translation_table] = round((seqs[seq_id].count('G') + seqs[seq_id].count('C')) / len(seqs[seq_id]) * 100, 4)
-
-
-                # determine best translation table
-                # create a numpy array to store all the information for a genome in the same order as the classifiers
-                aa_list = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V',
-                           'W', 'Y']
-
-                # Generate all possible combinations of 4 characters using 'A', 'C', 'G', 'T'
-                tetra_list = [''.join(tetra) for tetra in itertools.product('ACGT', repeat=4)]
-
-                difference_tetra = defaultdict()
-                for tetra in tetra_list:
-                    difference_tetra[tetra+'_diff']=kmer_signature.get(11).get(tetra)- kmer_signature.get(4).get(tetra)
-
-                difference_aa = defaultdict()
-                for aa in aa_list:
-                    difference_aa[aa+'_diff']=aa_frequency.get(11).get(aa) - aa_frequency.get(4).get(aa)
-
-                # # create a numpy array to store all the information for a genome in the same order as the classifiers
-                # genome_info = np.array([table_coding_density[4], table_coding_density[11],table_coding_density[11] -table_coding_density[4],
-                #                         gc_percentage[11]])
-                # genome_info = np.append(genome_info, difference_tetra)
-                # genome_info = np.append(genome_info, difference_aa)
+                gc_percentage = ksignature.calculate_gc_content(seqs)
+                kmer_signature_genome = ksignature.calculate_kmer_full_genome(processed_prodigal_input)
 
                 # create a dataframe to store the genome information with columns in the same order as the classifiers
                 # get columns from the scaler
@@ -211,48 +136,38 @@ class Prodigal(object):
                 temp_df['Coding_density_4'] = [table_coding_density[4]]
                 temp_df['Coding_density_11'] = [table_coding_density[11]]
                 temp_df['cd11_cd4_delta'] = [table_coding_density[11] - table_coding_density[4]]
-                temp_df['GC'] = [gc_percentage[11]]
+                temp_df['GC'] = [gc_percentage]
                 #we add the difference tetra
-                temp_df = pd.concat([temp_df, pd.DataFrame(difference_tetra, index=[0])], axis=1)
+                temp_df = pd.concat([temp_df, pd.DataFrame(kmer_signature_genome, index=[0])], axis=1)
                 #we add the difference aa
-                temp_df = pd.concat([temp_df, pd.DataFrame(difference_aa, index=[0])], axis=1)
 
                 classifier_4_11 = Classifier_4_11()
                 best_translation_table = classifier_4_11.get_translation_table(temp_df)[0]
 
+                # if the best translation table is 4, we need to check if its 4 or actually 25
+                if best_translation_table == 4:
+                    # we generate the temp files for the classifier 25
+                    translation_table = 25
+                    os.makedirs(os.path.join(tmp_dir, str(translation_table)))
+                    aa_gene_file_tmp, nt_gene_file_tmp, gff_file_tmp,processed_prodigal_input = self.run_prodigal_command(translation_table,
+                                                                                                 tmp_dir, genome_id,
+                                                                                                 genome_file, seqs,
+                                                                                                 total_bases)
 
-                # # Load the Scaler
-                # cwd = os.getcwd()
-                # scaler = joblib.load('gtranslate/biolib_lite/classifiers_model/scaler_4_11.pkl')
-                #
-                # # make sure temp_df has the same columns as the scaler
-                # temp_df = temp_df.reindex(columns=scaler.feature_names_in_, fill_value=0)
-                #
-                #
-                # # transform the genome info
-                # temp_df_scaled = scaler.transform(temp_df)
-                #
-                # # Convert the scaled array back into a DataFrame with the original column names
-                # temp_df_scaled = pd.DataFrame(temp_df_scaled, columns=temp_df.columns, index=temp_df.index)
-                #
-                # # Load the classifiers
-                # classifiers = joblib.load('gtranslate/biolib_lite/classifiers_model/ada_4_11.pkl')
-                # # predict the translation table
-                # # make sure temp_df has the same columns as the scaler
-                # #temp_df_scaled = temp_df_scaled.reindex(columns=classifiers.feature_names_in_, fill_value=0)
-                # best_translation_table = classifiers.predict(temp_df_scaled)[0]
-                # if best_translation_table == 0:
-                #     best_translation_table = 4
-                # else:
-                #     best_translation_table = 11
+                    # determine aa frequency
+                    aa_frequency[translation_table] = ksignature.calculate_aa_frequency(aa_gene_file_tmp,translation_table)
+                    print(aa_frequency[translation_table])
 
-                #self.logger.info('Best translation table for {}: {}'.format(genome_id, best_translation_table))
+                    # convert aa frequency and kmer signature to a dataframe and no other information
+                    merge_dictionary = {**aa_frequency[4], **kmer_gene_signature[4], **aa_frequency[25]}
+                    temp_df = pd.DataFrame([merge_dictionary])
+                    # print all the elements of the dataframe
+                    for col in temp_df.columns:
+                        print(col,temp_df[col].values[0])
 
 
-                #best_translation_table = 11
-                # if (table_coding_density[4] - table_coding_density[11] > 0.05) and table_coding_density[4] > 0.7:
-                #     best_translation_table = 4
-
+                    classifier_25 = Classifier_25()
+                    best_translation_table = classifier_25.get_translation_table(temp_df)[0]
 
                 shutil.copyfile(os.path.join(tmp_dir, str(best_translation_table),
                                              genome_id + '_genes.faa'), aa_gene_file)
@@ -391,6 +306,62 @@ class Prodigal(object):
             shutil.rmtree(self.output_dir)
 
         return summary_stats
+
+    def run_prodigal_command(self, translation_table, tmp_dir, genome_id, genome_file, seqs,total_bases):
+        aa_gene_file_tmp = os.path.join(tmp_dir, str(
+            translation_table), genome_id + '_genes.faa')
+        nt_gene_file_tmp = os.path.join(tmp_dir, str(
+            translation_table), genome_id + '_genes.fna')
+        gff_file_tmp = os.path.join(tmp_dir, str(
+            translation_table), genome_id + '.gff')
+
+        # check if there is sufficient bases to calculate prodigal
+        # parameters
+        if total_bases < 100000 or self.meta:
+            proc_str = 'meta'  # use best pre-calculated parameters
+        else:
+            proc_str = 'single'  # estimate parameters from data
+
+        # If this is a gzipped genome, re-write the uncompressed genome
+        # file to disk
+        prodigal_input = genome_file
+        if genome_file.endswith('.gz'):
+            prodigal_input = os.path.join(
+                tmp_dir, os.path.basename(genome_file[0:-3]) + '.fna')
+            write_fasta(seqs, prodigal_input)
+
+        # there may be ^M character in the input file,
+        # the following code is similar to dos2unix command to remove
+        # those special characters.
+        with open(prodigal_input, 'r') as fh:
+            text = fh.read().replace('\r\n', '\n')
+        processed_prodigal_input = os.path.join(
+            tmp_dir, os.path.basename(prodigal_input))
+        with open(processed_prodigal_input, 'w') as fh:
+            fh.write(text)
+
+        args = '-m'
+        if self.closed_ends:
+            args += ' -c'
+
+        cmd = ['prodigal', args, '-p', proc_str, '-q',
+               '-f', 'gff', '-g', str(translation_table),
+               '-a', aa_gene_file_tmp, '-d', nt_gene_file_tmp,
+               '-i', processed_prodigal_input, '-o', gff_file_tmp]
+
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, encoding='utf-8')
+
+        stdout, stderr = proc.communicate()
+        # This extra step has been added for the issue 451 where Prodigal can return a free pointer error
+        if proc.returncode != 0:
+            self.logger.warning('Error running Prodigal on genome: '
+                                '{}'.format(genome_file))
+            self.logger.warning('Error message:')
+            for line in stderr.splitlines():
+                print(line)
+            self.logger.warning('This genome is skipped.')
+        return aa_gene_file_tmp, nt_gene_file_tmp, gff_file_tmp ,processed_prodigal_input
 
 
 class ProdigalGeneFeatureParser(object):
@@ -535,25 +506,25 @@ class GenomicSignatures(object):
 
         return retList, kmerToCanonicalIndex
 
-    def calculate(self, seqFile):
+    def calculate(self, seqFile,translation_table):
         """Calculate genomic signature of each sequence."""
 
         # process each sequence in parallel
         list_jobs = []
 
         seqs = read_fasta(seqFile)
-        codon_usage = self.seqSignature(seqs)
+        codon_usage = self.seqSignature(seqs,translation_table)
         return codon_usage
 
-    def calculate_aa_frequency(self, seqFile):
+    def calculate_aa_frequency(self, seqFile,translation_table):
 
         # Calculating amino acid frequency in gene calling files
         seqs = read_fasta(seqFile)
-        aa_freq = self.aa_frequency(seqs)
+        aa_freq = self.aa_frequency(seqs,translation_table)
         return aa_freq
 
 
-    def seqSignature(self, seqs):
+    def seqSignature(self, seqs,translation_table):
         sig = [0] * len(self.kmerCols)
 
         for seqid,seq in seqs.items():
@@ -573,14 +544,16 @@ class GenomicSignatures(object):
             sig /= np.sum(sig)
         # convert to list
         sig = list(sig)
-        # multiply by 100 and round to 2 decimal places
-        sig = [round(i*100,4) for i in sig]
+        # multiply by 100
+        sig = [i*100 for i in sig]
         # convert sig to dictionary
         sig = dict(zip(self.kmerCols, sig))
+        #we add the suffix of the translation table to the dictionary
+        sig = {k+f'_{translation_table}': v for k, v in sig.items()}
 
         return sig
 
-    def aa_frequency(self, seqs):
+    def aa_frequency(self, seqs,tt):
         standard_amino_acids = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
         aa_freq = {aa: 0 for aa in standard_amino_acids}
         for seqid, seq in seqs.items():
@@ -592,7 +565,7 @@ class GenomicSignatures(object):
         if total_aa != 0 :
             aa_freq = {aa: freq/total_aa for aa, freq in aa_freq.items()}
         # multiply by 100 and round to 2 decimal places
-        aa_freq = {aa: round(freq*100, 4) for aa, freq in aa_freq.items()}
+        aa_freq = {aa+f'_{tt}': round(freq*100, 4) for aa, freq in aa_freq.items()}
         return aa_freq
 
     def calculate_gc_content(self,seq_dict):
@@ -615,3 +588,18 @@ class GenomicSignatures(object):
             total_count += len(filtered_seq)
 
         return (gc_count / total_count * 100) if total_count > 0 else 0
+
+    def calculate_kmer_full_genome(self, processed_prodigal_input):
+        jellyfish = Jellyfish()
+        dict_kmers = jellyfish.run(processed_prodigal_input)
+
+        # we convert the kmers to frequencies by dividing by the total number of kmers
+        total_kmers = sum(dict_kmers.values())
+        for kmer in dict_kmers:
+            dict_kmers[kmer] = (100*dict_kmers[kmer]) / total_kmers
+
+        # we make sure that all kmers from Jellyfish are in dict_kmers and we add the missing ones
+        for kmer in CONFIG.JELLYFISH_4MERS:
+            if kmer not in dict_kmers:
+                dict_kmers[kmer] = 0
+        return dict_kmers
