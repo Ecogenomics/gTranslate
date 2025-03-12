@@ -18,7 +18,7 @@
 ###############################################################################
 
 
-__prog_name__ = 'train_classifier_4_11.py'
+__prog_name__ = 'train_classifier_4_25.py'
 __prog_desc__ = ('This script outlines the steps to generate a classifier model and scaler using the feature table. '
                  'It includes data preprocessing, model training, and scaling to ensure optimal performance for '
                  'classification tasks.')
@@ -35,6 +35,8 @@ __status__ = 'Development'
 import argparse
 import os
 import sys
+from itertools import product
+
 import joblib
 
 import numpy as np
@@ -72,20 +74,15 @@ class ScalerClassifier(object):
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
 
-        # Tetranucleotide list from Jellyfish
-        self.tetra_list = ['AAAA', 'AAAC', 'AAAG', 'AAAT', 'AACA', 'AACC', 'AACG', 'AACT', 'AAGA', 'AAGC', 'AAGG',
-                           'AAGT', 'AATA', 'AATC', 'AATG', 'AATT', 'ACAA', 'ACAC', 'ACAG', 'ACAT', 'ACCA', 'ACCC',
-                           'ACCG', 'ACCT', 'ACGA', 'ACGC', 'ACGG', 'ACGT', 'ACTA', 'ACTC', 'ACTG', 'AGAA', 'AGAC',
-                           'AGAG', 'AGAT', 'AGCA', 'AGCC', 'AGCG', 'AGCT', 'AGGA', 'AGGC', 'AGGG', 'AGTA', 'AGTC',
-                           'AGTG', 'ATAA', 'ATAC', 'ATAG', 'ATAT', 'ATCA', 'ATCC', 'ATCG', 'ATGA', 'ATGC', 'ATGG',
-                           'ATTA', 'ATTC', 'ATTG', 'CAAA', 'CAAC', 'CAAG', 'CACA', 'CACC', 'CACG', 'CAGA', 'CAGC',
-                           'CAGG', 'CATA', 'CATC', 'CATG', 'CCAA', 'CCAC', 'CCAG', 'CCCA', 'CCCC', 'CCCG', 'CCGA',
-                           'CCGC', 'CCGG', 'CCTA', 'CCTC', 'CGAA', 'CGAC', 'CGAG', 'CGCA', 'CGCC', 'CGCG', 'CGGA',
-                           'CGGC', 'CGTA', 'CGTC', 'CTAA', 'CTAC', 'CTAG', 'CTCA', 'CTCC', 'CTGA', 'CTGC', 'CTTA',
-                           'CTTC', 'GAAA', 'GAAC', 'GACA', 'GACC', 'GAGA', 'GAGC', 'GATA', 'GATC', 'GCAA', 'GCAC',
-                           'GCCA', 'GCCC', 'GCGA', 'GCGC', 'GCTA', 'GGAA', 'GGAC', 'GGCA', 'GGCC', 'GGGA', 'GGTA',
-                           'GTAA', 'GTAC', 'GTCA', 'GTGA', 'GTTA', 'TAAA', 'TACA', 'TAGA', 'TATA', 'TCAA', 'TCCA',
-                           'TCGA', 'TGAA', 'TGCA', 'TTAA']
+        # non Canonical tetranucleotides
+        list_kmers=["".join(kmer) for kmer in product('ACGT', repeat=4)]
+        # add the suffix _4 to the tetranucleotides
+        self.tetra_list = [f'{kmer}_4' for kmer in list_kmers]
+
+        #we do the same for the amino acid
+        list_aa = ['A', 'R', 'N', 'D', 'C', 'Q', 'E', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V']
+        self.aa_list_4 = [f'{aa}_4' for aa in list_aa]
+        self.aa_list_25 = [f'{aa}_25' for aa in ['G','W']]
 
     def run(self, seed=None, sfs=False):
         self.logger.info(f'{__prog_name__} {" ".join(sys.argv[1:])}')
@@ -94,6 +91,7 @@ class ScalerClassifier(object):
         scaler = StandardScaler()
 
         self.logger.info(f"We use seed: {seed}")
+
         # list all rows with NaN values
         rows_with_nan = self.training_data[self.training_data.isnull().any(axis=1)]
         self.logger.info(f'There is {len(rows_with_nan)} rows with NaN values in the training data')
@@ -104,6 +102,8 @@ class ScalerClassifier(object):
         # list of columns to fit are Coding_density_4, Coding_density_11 and cd11_cd4_delta ,GC, all the tetranucleotide and amino acid differences
         columns_to_fit = ['Coding_density_4', 'Coding_density_11', 'cd11_cd4_delta', 'GC']
         columns_to_fit.extend([f'{tetra}' for tetra in self.tetra_list])
+        columns_to_fit.extend([f'{aa}' for aa in self.aa_list_4])
+        columns_to_fit.extend([f'{aa}' for aa in self.aa_list_25])
 
         # lets fit_transform the training data except for the genome column
         self.training_data[columns_to_fit] = scaler.fit_transform(self.training_data[columns_to_fit])
@@ -114,8 +114,6 @@ class ScalerClassifier(object):
         # # show the mean and standard deviation of the training data Coding_density_4,
         self.logger.info(f"Mean of Coding_density_4: {self.training_data['Coding_density_4'].mean()}")
         self.logger.info(f"Standard deviation of Coding_density_4: {self.training_data['Coding_density_4'].std()}")
-
-
 
         train, labels, genome_list_full = self.datasplit(self.training_data)
         train.head(1)

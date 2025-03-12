@@ -30,24 +30,46 @@ import shutil
 import subprocess
 import tempfile
 from collections import defaultdict, namedtuple
+from dataclasses import dataclass, field
 
 import joblib
 import numpy as np
 import pandas as pd
 
+from . import seq_tk
 from .common import remove_extension, make_sure_path_exists, check_file_exists
 from .execute import check_on_path
 from .parallel import Parallel
 from .seq_io import read_fasta, write_fasta
+from .seq_tk import gc, N50
 from ..classifiers.table_classifiers import Classifier_4_11, Classifier_25
 from gtranslate.config.common import CONFIG
 from ..external.jellyfish import Jellyfish
+
+@dataclass
+class ConsumerData:
+    aa_gene_file: str
+    nt_gene_file: str
+    gff_file: str
+    is_empty: bool
+    metadata: dict = field(default_factory=dict)
+
+    def __post_init__(self):
+        for key, value in self.metadata.items():
+            setattr(self, key, value) # Dynamically add metadata keys as attributes
+        if 'probability_4_25' not in self.metadata:
+            self.probability_4_25 = 'NA'
+
+
 
 
 class Prodigal(object):
     """Wrapper for running Prodigal in parallel."""
 
-    def __init__(self, cpus, verbose=True):
+    def __init__(self, cpus, verbose=True,cl11=None,
+            scale11=None,
+            cl25=None,
+            scale25=None,):
         """Initialization.
 
         Parameters
@@ -64,6 +86,10 @@ class Prodigal(object):
 
         self.cpus = cpus
         self.verbose = verbose
+        self.cl11 = cl11
+        self.scale11 = scale11
+        self.cl25 = cl25
+        self.scale25 = scale25
 
     def _producer(self, genome_file):
         """Apply prodigal to genome with most suitable translation table.
@@ -121,13 +147,25 @@ class Prodigal(object):
                     for seq_id, _seq in seqs.items():
                         codingBases += prodigalParser.coding_bases(seq_id)
 
+
+
                     codingDensity = float(codingBases) / total_bases
                     table_coding_density[translation_table] = codingDensity * 100
                     aa_frequency[translation_table] = ksignature.calculate_aa_frequency(aa_gene_file_tmp,translation_table)
                     # calculate kmer signature for the genes
                     kmer_gene_signature[translation_table] = ksignature.calculate(nt_gene_file_tmp,translation_table)
                     # for GC percentage we only count the ATCG bases and not the N
-                gc_percentage = ksignature.calculate_gc_content(seqs)
+
+                genome_metadata_dict = {}
+                genome_metadata_dict['gc_percent'] = ksignature.calculate_gc_content(seqs)
+                genome_metadata_dict['n50'] = N50(seqs)
+                genome_metadata_dict['genome_size'] = sum([len(seq) for seq in seqs.values()])
+                genome_metadata_dict['contig_count'] = len(seqs)
+
+                # we store the coding density in the genome metadata dictionary
+                genome_metadata_dict['coding_density_4'] = table_coding_density[4]
+                genome_metadata_dict['coding_density_11'] = table_coding_density[11]
+
                 kmer_signature_genome = ksignature.calculate_kmer_full_genome(processed_prodigal_input)
 
                 # create a dataframe to store the genome information with columns in the same order as the classifiers
@@ -136,13 +174,14 @@ class Prodigal(object):
                 temp_df['Coding_density_4'] = [table_coding_density[4]]
                 temp_df['Coding_density_11'] = [table_coding_density[11]]
                 temp_df['cd11_cd4_delta'] = [table_coding_density[11] - table_coding_density[4]]
-                temp_df['GC'] = [gc_percentage]
+                temp_df['GC'] = [genome_metadata_dict['gc_percent']]
                 #we add the difference tetra
                 temp_df = pd.concat([temp_df, pd.DataFrame(kmer_signature_genome, index=[0])], axis=1)
                 #we add the difference aa
 
-                classifier_4_11 = Classifier_4_11()
-                best_translation_table = classifier_4_11.get_translation_table(temp_df)[0]
+                classifier_4_11 = Classifier_4_11(self.cl11,self.scale11)
+                best_translation_table,probability_4_11 = classifier_4_11.get_translation_table(temp_df)
+                genome_metadata_dict['probability_4_11'] = probability_4_11
 
                 # if the best translation table is 4, we need to check if its 4 or actually 25
                 if best_translation_table == 4:
@@ -156,18 +195,17 @@ class Prodigal(object):
 
                     # determine aa frequency
                     aa_frequency[translation_table] = ksignature.calculate_aa_frequency(aa_gene_file_tmp,translation_table)
-                    print(aa_frequency[translation_table])
 
                     # convert aa frequency and kmer signature to a dataframe and no other information
                     merge_dictionary = {**aa_frequency[4], **kmer_gene_signature[4], **aa_frequency[25]}
                     temp_df = pd.DataFrame([merge_dictionary])
                     # print all the elements of the dataframe
-                    for col in temp_df.columns:
-                        print(col,temp_df[col].values[0])
 
 
-                    classifier_25 = Classifier_25()
-                    best_translation_table = classifier_25.get_translation_table(temp_df)[0]
+                    classifier_25 = Classifier_25(self.cl25,self.scale25)
+                    best_translation_table,probability_4_25 = classifier_25.get_translation_table(temp_df)
+                    genome_metadata_dict['probability_4_25'] = probability_4_25
+                genome_metadata_dict['best_tln_table'] = best_translation_table
 
                 shutil.copyfile(os.path.join(tmp_dir, str(best_translation_table),
                                              genome_id + '_genes.faa'), aa_gene_file)
@@ -176,8 +214,8 @@ class Prodigal(object):
                 shutil.copyfile(os.path.join(tmp_dir, str(best_translation_table),
                                              genome_id + '.gff'), gff_file)
 
-        return (genome_id, aa_gene_file, nt_gene_file, gff_file, best_translation_table, table_coding_density[4],
-                table_coding_density[11],False)
+
+        return (genome_id, aa_gene_file, nt_gene_file, gff_file,genome_metadata_dict,False)
 
     def _consumer(self, produced_data, consumer_data):
         """Consume results from producer processes.
@@ -200,22 +238,12 @@ class Prodigal(object):
             Summary statistics of called genes for each genome.
         """
 
-        ConsumerData = namedtuple(
-            'ConsumerData',
-            'aa_gene_file nt_gene_file gff_file best_translation_table coding_density_4 coding_density_11 is_empty')
         if consumer_data is None:
-            consumer_data = defaultdict(ConsumerData)
+            consumer_data = {}
 
-        genome_id, aa_gene_file, nt_gene_file, gff_file, best_translation_table, coding_density_4, coding_density_11, is_empty = produced_data
+        genome_id, aa_gene_file, nt_gene_file, gff_file, metadata_dict, is_empty = produced_data
 
-        consumer_data[genome_id] = ConsumerData(aa_gene_file,
-                                                nt_gene_file,
-                                                gff_file,
-                                                best_translation_table,
-                                                coding_density_4,
-                                                coding_density_11,
-                                                is_empty)
-
+        consumer_data[genome_id] = ConsumerData(aa_gene_file, nt_gene_file, gff_file, is_empty,metadata_dict)
         return consumer_data
 
     def _progress(self, processed_items, total_items):
@@ -348,6 +376,7 @@ class Prodigal(object):
                '-f', 'gff', '-g', str(translation_table),
                '-a', aa_gene_file_tmp, '-d', nt_gene_file_tmp,
                '-i', processed_prodigal_input, '-o', gff_file_tmp]
+
 
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, encoding='utf-8')
@@ -569,25 +598,38 @@ class GenomicSignatures(object):
         return aa_freq
 
     def calculate_gc_content(self,seq_dict):
+        """Calculate GC of sequences.
+
+        GC is calculated as (G+C)/(A+C+G+T), where
+        each of these terms represents the number
+        of nucleotides within the sequence. Ambiguous
+        and degenerate bases are ignored. Uracil (U)
+        is treated as a thymine (T).
+
+        Parameters
+        ----------
+        seqs : dict[seq_id] -> seq
+            Sequences indexed by sequence ids.
+
+        Returns
+        -------
+        float
+            GC content of sequences.
         """
-        Calculate the combined GC content across all sequences in a dictionary.
 
-        Args:
-            seq_dict (dict): A dictionary where keys are sequence IDs and values are sequences.
+        A = 0
+        C = 0
+        G = 0
+        T = 0
+        for seq in seq_dict.values():
+            a, c, g, t = seq_tk.count_nt(seq)
 
-        Returns:
-            float: The combined GC content percentage across all sequences.
-        """
-        gc_count = 0
-        total_count = 0
+            A += a
+            C += c
+            G += g
+            T += t
 
-        for sequence in seq_dict.values():
-            # Filter out non-ATCG characters
-            filtered_seq = [base for base in sequence if base in 'ATCG']
-            gc_count += filtered_seq.count('G') + filtered_seq.count('C')
-            total_count += len(filtered_seq)
-
-        return (gc_count / total_count * 100) if total_count > 0 else 0
+        return (float(G + C)*100) / (A + C + G + T)
 
     def calculate_kmer_full_genome(self, processed_prodigal_input):
         jellyfish = Jellyfish()

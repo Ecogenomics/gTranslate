@@ -11,11 +11,24 @@ class TlnTableFile(object):
     def __init__(self, out_dir: str, gid: str,
                  best_tln_table: Optional[int] = None,
                  coding_density_4: Optional[float] = None,
-                 coding_density_11: Optional[float] = None):
+                 coding_density_11: Optional[float] = None,
+                 gc_percentage: Optional[float] = None,
+                 n50_value: Optional[int] = None,
+                 genome_length: Optional[int] = None,
+                 contig_count: Optional[int] = None,
+                 probability_4_11: Optional[float] = None,
+                 probability_4_25: Optional[float] = None):
         self.path = self.get_path(out_dir, gid)
         self._best_tln_table = best_tln_table
         self._coding_density_4 = coding_density_4
         self._coding_density_11 = coding_density_11
+        self._gc_percent = gc_percentage
+        self._n50 = n50_value
+        self._genome_size = genome_length
+        self._contig_count = contig_count
+        self._probability_4_11 = probability_4_11
+        self._probability_4_25 = probability_4_25
+
 
     @property
     def best_tln_table(self):
@@ -50,6 +63,72 @@ class TlnTableFile(object):
         except ValueError:
             raise GTranslateExit(f'Invalid coding density: {v} for {self.path}')
 
+    @property
+    def gc_percent(self):
+        return self._gc_percent
+
+    @gc_percent.setter
+    def gc_percent(self, v):
+        try:
+            self._gc_percent = float(v)
+        except ValueError:
+            raise GTranslateExit(f'Invalid GC percentage: {v} for {self.path}')
+
+    @property
+    def n50(self):
+        return self._n50
+
+    @n50.setter
+    def n50(self, v):
+        try:
+            self._n50 = int(v)
+        except ValueError:
+            raise GTranslateExit(f'Invalid N50 value: {v} for {self.path}')
+
+    @property
+    def genome_size(self):
+        return self._genome_size
+
+    @genome_size.setter
+    def genome_size(self, v):
+        try:
+            self._genome_size = int(v)
+        except ValueError:
+            raise GTranslateExit(f'Invalid genome size: {v} for {self.path}')
+
+    @property
+    def contig_count(self):
+        return self._contig_count
+
+    @contig_count.setter
+    def contig_count(self, v):
+        try:
+            self._contig_count = int(v)
+        except ValueError:
+            raise GTranslateExit(f'Invalid contig count: {v} for {self.path}')
+
+    @property
+    def probability_4_11(self):
+        return self._probability_4_11
+
+    @probability_4_11.setter
+    def probability_4_11(self, v):
+        try:
+            self._probability_4_11 = float(v)
+        except ValueError:
+            raise GTranslateExit(f'Invalid probability 4 11: {v} for {self.path}')
+
+    @property
+    def probability_4_25(self):
+        return self._probability_4_25
+
+    @probability_4_25.setter
+    def probability_4_25(self, v):
+        try:
+            self._probability_4_25 = str(v)
+        except ValueError:
+            raise GTranslateExit(f'Invalid probability 4 25: {v} for {self.path}')
+
     @staticmethod
     def get_path(out_dir: str, gid: str):
         return os.path.join(out_dir, f'{gid}{TRANSLATION_TABLE_SUFFIX}')
@@ -65,9 +144,29 @@ class TlnTableFile(object):
                     self.coding_density_4 = val
                 elif idx == 'coding_density_11':
                     self.coding_density_11 = val
+                elif idx == 'gc_percent':
+                    self.gc_percent = val
+                elif idx == 'n50':
+                    self.n50 = val
+                elif idx == 'genome_size':
+                    self.genome_size = val
+                elif idx == 'contig_count':
+                    self.contig_count = val
+                elif idx == 'probability_4_11':
+                    self.probability_4_11 = val
+                elif idx == 'probability_4_25':
+                    self.probability_4_25 = val
+
 
     def write(self):
         with open(self.path, 'w') as fh:
             fh.write(f'best_translation_table\t{self.best_tln_table}\n')
             fh.write(f'coding_density_4\t{self.coding_density_4}\n')
             fh.write(f'coding_density_11\t{self.coding_density_11}\n')
+            fh.write(f'gc_percent\t{self.gc_percent}\n')
+            fh.write(f'n50\t{self.n50}\n')
+            fh.write(f'genome_size\t{self.genome_size}\n')
+            fh.write(f'contig_count\t{self.contig_count}\n')
+            fh.write(f'probability_4_11\t{self.probability_4_11}\n')
+            fh.write(f'probability_4_25\t{self.probability_4_25}\n')
+

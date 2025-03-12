@@ -186,7 +186,11 @@ class OptionsParser(object):
         reports = table_predictor.predict(genomes,
                          options.out_dir,
                          options.prefix,
-                         options.force)
+                         options.force,
+                         options.cl11,
+                         options.scale11,
+                         options.cl25,
+                         options.scale25)
 
         self.logger.info('Done.')
 

@@ -62,6 +62,21 @@ def __prefix(group):
 def __temp_dir(group):
     group.add_argument('--tmpdir', action=ChangeTempAction, default=tempfile.gettempdir(),
                        help="specify alternative directory for temporary files")
+
+
+def __cl11(group):
+    group.add_argument('--cl11', help='Pickle file for Classifier 4/11')
+
+def __scale11(group):
+    group.add_argument('--scale11', help='Pickle file for Scaler 4/11')
+
+def __cl25(group):
+    group.add_argument('--cl25', help='Pickle file for Classifier 4/25')
+
+def __scale25(group):
+    group.add_argument('--scale25', help='Pickle file for Scaler 4/25')
+
+
 def get_main_parser():
     # Setup the main, and sub parsers.
     main_parser = argparse.ArgumentParser(
@@ -78,9 +93,14 @@ def get_main_parser():
             __out_dir(grp, required=True)
         with arg_group(parser, 'optional arguments') as grp:
             __extension(grp)
+            __temp_dir(grp)
             __cpus(grp)
             __keep_called_genes(grp)
             __prefix(grp)
             __force(grp)
+            __cl11(grp)
+            __scale11(grp)
+            __cl25(grp)
+            __scale25(grp)
 
     return main_parser

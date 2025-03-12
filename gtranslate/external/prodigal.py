@@ -67,7 +67,7 @@ class Prodigal(object):
         except:
             return "(version unavailable)"
 
-    def _run_prodigal(self, genome_id, fasta_path):
+    def _run_prodigal(self, genome_id, fasta_path,cl11,scale11,cl25,scale25):
         """Run Prodigal.
 
         Parameters
@@ -92,10 +92,13 @@ class Prodigal(object):
         if all([file_has_checksum(x) for x in out_files]):
             tln_table_file.read()
             self.warnings.info(f'Skipped Prodigal processing for: {genome_id}')
-            return aa_gene_file, nt_gene_file, gff_file, tln_table_file.path, tln_table_file.best_tln_table, True , False
+            return aa_gene_file, nt_gene_file, gff_file, tln_table_file, True , False
 
         # Run Prodigal
-        prodigal = BioLibProdigal(1, False)
+        prodigal = BioLibProdigal(1, False,cl11=cl11,
+            scale11=scale11,
+            cl25=cl25,
+            scale25=scale25)
         summary_stats = prodigal.run([fasta_path], output_dir,
                                      called_genes=False)
 
@@ -123,9 +126,17 @@ class Prodigal(object):
             shutil.move(summary_stats.gff_file, gff_file)
 
             # save translation table information
-            tln_table_file.best_tln_table = summary_stats.best_translation_table
-            tln_table_file.coding_density_4 = round(summary_stats.coding_density_4 * 100, 2)
-            tln_table_file.coding_density_11 = round(summary_stats.coding_density_11 * 100, 2)
+            tln_table_file.best_tln_table = summary_stats.best_tln_table
+            tln_table_file.coding_density_4 = summary_stats.coding_density_4
+            tln_table_file.coding_density_11 = summary_stats.coding_density_11
+            tln_table_file.gc_percent = summary_stats.gc_percent
+            tln_table_file.n50 = summary_stats.n50
+            tln_table_file.genome_size = summary_stats.genome_size
+            tln_table_file.contig_count = summary_stats.contig_count
+            tln_table_file.probability_4_11 = summary_stats.probability_4_11
+            tln_table_file.probability_4_25 = summary_stats.probability_4_25
+
+
             tln_table_file.write()
 
             # Create a hash of each file
@@ -134,8 +145,7 @@ class Prodigal(object):
                     with open(out_file + CHECKSUM_SUFFIX, 'w') as fh:
                         fh.write(sha256(out_file))
 
-
-        return aa_gene_file, nt_gene_file, gff_file, tln_table_file.path, summary_stats.best_translation_table, False , summary_stats.is_empty
+        return aa_gene_file, nt_gene_file, gff_file, tln_table_file, False , summary_stats.is_empty
 
     def _worker(self, out_dict, worker_queue, writer_queue, n_skipped):
         """This worker function is invoked in a process."""
@@ -145,22 +155,30 @@ class Prodigal(object):
             if data is None:
                 break
 
-            genome_id, file_path = data
+            genome_id, file_path,cl11,scale11,cl25,scale25 = data
 
-            rtn_files = self._run_prodigal(genome_id, file_path)
+            rtn_files = self._run_prodigal(genome_id, file_path,cl11,scale11,cl25,scale25)
 
             # Only proceed if an error didn't occur in BioLib Prodigal
             if rtn_files:
-                aa_gene_file, nt_gene_file, gff_file, translation_table_file, best_translation_table, was_skipped ,is_empty = rtn_files
+                aa_gene_file, nt_gene_file, gff_file, translation_table_file,was_skipped,is_empty = rtn_files
                 if was_skipped:
-                    print("was skipped")
+                    print(f'{genome_id} was skipped')
                     with n_skipped.get_lock():
                         n_skipped.value += 1
                 prodigal_infos = {"aa_gene_path": aa_gene_file,
                                   "nt_gene_path": nt_gene_file,
                                   "gff_path": gff_file,
-                                  "translation_table_path": translation_table_file,
-                                  "best_translation_table": best_translation_table,
+                                  "translation_table_path": translation_table_file.path,
+                                  "best_translation_table": translation_table_file.best_tln_table,
+                                  "coding_density_4": translation_table_file.coding_density_4,
+                                    "coding_density_11": translation_table_file.coding_density_11,
+                                    "gc_percent": translation_table_file.gc_percent,
+                                    "n50": translation_table_file.n50,
+                                    "genome_size": translation_table_file.genome_size,
+                                    "contig_count": translation_table_file.contig_count,
+                                    "probability_4_11": translation_table_file.probability_4_11,
+                                    "probability_4_25": translation_table_file.probability_4_25,
                                   "is_empty": is_empty}
 
                 out_dict[genome_id] = prodigal_infos
@@ -172,7 +190,7 @@ class Prodigal(object):
             for _ in iter(writer_queue.get, None):
                 p_bar.update()
 
-    def run(self, genomic_files):
+    def run(self, genomic_files,cl11,scale11,cl25,scale25):
         """Run Prodigal across a set of genomes.
 
         Parameters
@@ -188,7 +206,7 @@ class Prodigal(object):
         writer_queue = mp.Queue()
 
         for genome_id, file_path in genomic_files.items():
-            worker_queue.put((genome_id, file_path))
+            worker_queue.put((genome_id, file_path,cl11,scale11,cl25,scale25))
 
         for _ in range(self.threads):
             worker_queue.put(None)

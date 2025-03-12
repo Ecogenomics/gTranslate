@@ -21,7 +21,7 @@ from gtranslate.config.common import CONFIG
 from gtranslate.biolib_lite.execute import check_dependencies
 from gtranslate.config.output import *
 from gtranslate.external.prodigal import Prodigal
-from gtranslate.files.prodigal.tln_table_summary import TlnTableSummaryFile
+from gtranslate.files.prodigal.tln_table_summary import TranslationSummaryFile, TranslationSummaryFileRow
 from gtranslate.tools import tqdm_log
 
 
@@ -43,7 +43,8 @@ class TablePredictor(object):
         self.cpus = cpus
         self.debug = debug
 
-    def predict(self, genomes, out_dir, prefix, force):
+    def predict(self, genomes, out_dir, prefix, force,cl11=None,scale11=None,
+                cl25=None,scale25=None):
             """Call Prodigal with TT 4 and 11 to identify genome profiles.
 
 
@@ -70,6 +71,15 @@ class TablePredictor(object):
             """
             check_dependencies(['prodigal'])
 
+            if cl11:
+                self.logger.info(f'Custom classifier 4/11 : {cl11}')
+            if scale11:
+                self.logger.info(f'Custom scaler 4/11 : {scale11}')
+            if cl25:
+                self.logger.info(f'Custom classifier 4/25 : {cl25}')
+            if scale25:
+                self.logger.info(f'Custom scaler 4/25 : {scale25}')
+
             reports = {}
             self.called_gene_dir = os.path.join(out_dir, DIR_PREDICT_GENES)
             self.failed_genomes = os.path.join(
@@ -85,7 +95,7 @@ class TablePredictor(object):
                                 force)
             self.logger.log(
                 CONFIG.LOG_TASK, f'Running Prodigal {prodigal.version} to identify genes.')
-            genome_dictionary = prodigal.run(genomes)
+            genome_dictionary = prodigal.run(genomes,cl11,scale11,cl25,scale25)
 
 
             gene_files = [(db_genome_id, genome_dictionary[db_genome_id]['aa_gene_path'])
@@ -108,12 +118,22 @@ class TablePredictor(object):
         """Write the identified translation tables to disk."""
 
         # Summarise the copy number of each AR53 and BAC120 markers.
-        tln_summary_file = TlnTableSummaryFile(outdir, prefix)
+        tln_summary_file = TranslationSummaryFile(outdir, prefix)
 
         for db_genome_id, info in tqdm_log(sorted(gene_dict.items()), unit='genome'):
             # Write the best translation table to disk for this genome.
-            tln_summary_file.add_genome(
-                db_genome_id, info.get("best_translation_table"))
+            summary_row = TranslationSummaryFileRow()
+            summary_row.gid = db_genome_id
+            summary_row.best_tln_table = info.get("best_translation_table")
+            summary_row.coding_density_4 = info.get("coding_density_4")
+            summary_row.coding_density_11 = info.get("coding_density_11")
+            summary_row.gc_percent = info.get("gc_percent")
+            summary_row.n50 = info.get("n50")
+            summary_row.genome_size = info.get("genome_size")
+            summary_row.contig_count = info.get("contig_count")
+            summary_row.probability_4_11 = info.get("probability_4_11")
+            summary_row.probability_4_25 = info.get("probability_4_25","N/A")
+            tln_summary_file.add_row(summary_row)
 
         tln_summary_file.write()
         return True
