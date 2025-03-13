@@ -33,15 +33,14 @@ __email__ = 'uqpchaum@uq.edu.au'
 __status__ = 'Development'
 
 import argparse
+import json
 import os
 import sys
 from itertools import product
-
 import joblib
-
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import AdaBoostClassifier
+from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 from sklearn.metrics import balanced_accuracy_score
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -51,21 +50,19 @@ from mlxtend.feature_selection import SequentialFeatureSelector
 
 from script_logger import CustomLogger
 
-
-def warn(*args, **kwargs): pass
+#prevents warnings from being displayed.
 import warnings
-warnings.warn = warn
-
+warnings.simplefilter("ignore")
 
 class ScalerClassifier(object):
 
-    def __init__(self, train_data_path,output_dir,threads_count):
+    def __init__(self, train_data_path,output_dir,threads_count,seed=None):
 
         # Initialize the logger
         logger_instance = CustomLogger(output_dir,__prog_name__)
         self.logger = logger_instance.get_logger()
 
-
+        self.seed = seed
         self.thread_count = threads_count
         self.training_data = pd.read_csv(train_data_path, sep='\t')
         self.training_data = self.check_percentage(self.training_data)
@@ -84,13 +81,16 @@ class ScalerClassifier(object):
         self.aa_list_4 = [f'{aa}_4' for aa in list_aa]
         self.aa_list_25 = [f'{aa}_25' for aa in ['G','W']]
 
-    def run(self, seed=None, sfs=False):
+    def run(self, sfs=False):
         self.logger.info(f'{__prog_name__} {" ".join(sys.argv[1:])}')
 
         # Initialize the StandardScaler
         scaler = StandardScaler()
 
-        self.logger.info(f"We use seed: {seed}")
+        # Set the seed only when `run()` is called
+        seed_to_use = self.seed if self.seed is not None else np.random.randint(0, 1000)
+
+        self.logger.info(f"We use seed: {seed_to_use}")
 
         # list all rows with NaN values
         rows_with_nan = self.training_data[self.training_data.isnull().any(axis=1)]
@@ -100,16 +100,17 @@ class ScalerClassifier(object):
             self.training_data[tetra] = self.training_data[tetra].replace(np.nan, 0)
 
         # list of columns to fit are Coding_density_4, Coding_density_11 and cd11_cd4_delta ,GC, all the tetranucleotide and amino acid differences
+        # TODO: we may have to change the columns to fit based on the results of the analysis
         columns_to_fit = ['Coding_density_4', 'Coding_density_11', 'cd11_cd4_delta', 'GC']
         columns_to_fit.extend([f'{tetra}' for tetra in self.tetra_list])
         columns_to_fit.extend([f'{aa}' for aa in self.aa_list_4])
         columns_to_fit.extend([f'{aa}' for aa in self.aa_list_25])
 
-        # lets fit_transform the training data except for the genome column
+        # let's fit_transform the training data except for the genome column
         self.training_data[columns_to_fit] = scaler.fit_transform(self.training_data[columns_to_fit])
 
         # save the scaler to disk
-        joblib.dump(scaler, os.path.join(self.output_dir, 'scaler.pkl'))
+        joblib.dump(scaler, os.path.join(self.output_dir, 'scaler_4_25.pkl'))
 
         # # show the mean and standard deviation of the training data Coding_density_4,
         self.logger.info(f"Mean of Coding_density_4: {self.training_data['Coding_density_4'].mean()}")
@@ -118,10 +119,16 @@ class ScalerClassifier(object):
         train, labels, genome_list_full = self.datasplit(self.training_data)
         train.head(1)
 
-        picked_classifier = AdaBoostClassifier(n_estimators=100, random_state=seed)
+        # Assuming y contains your target labels
+        class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(labels), y=labels)
+        weights_dict = dict(enumerate(class_weights))
+        self.logger.info(f"Class weights: {json.dumps(weights_dict)}")
+
+        # TODO: we may have to change the classifier/scaler based on the results of the analysis
+        picked_classifier = RandomForestClassifier(verbose=1,n_jobs=40,class_weight=weights_dict,n_estimators=500,random_state=42)
 
         if sfs:
-            sss = StratifiedKFold(n_splits=5, random_state=seed, shuffle=True)
+            sss = StratifiedKFold(n_splits=5, random_state=seed_to_use, shuffle=True)
             sf_selector = SequentialFeatureSelector(picked_classifier, forward=True, n_jobs=self.thread_count, verbose=1, cv=sss,
                                       scoring='balanced_accuracy', k_features=(1, 15))
             sf_selector.fit(train, labels)
@@ -133,19 +140,12 @@ class ScalerClassifier(object):
             train = train[selected_features_names]
 
 
-        # Assuming y contains your target labels
-        class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(labels), y=labels)
-        weights_dict = dict(enumerate(class_weights))
-        self.logger.info("Class weights:", weights_dict)
-        print("Class weights:", weights_dict)
+        x_train, x_val, y_train, y_val = train_test_split(train, labels, test_size=0.2, stratify=labels , random_state=seed_to_use)
+        self.logger.info(f"Training data shape: {x_train.shape}")
 
+        picked_classifier.fit(x_train, y_train)
 
-        X_train, x_val, y_train, y_val = train_test_split(train, labels, test_size=0.2, stratify=labels , random_state=seed)
-        self.logger.info(f"Training data shape: {X_train.shape}")
-
-        picked_classifier.fit(X_train, y_train)
-
-        joblib.dump(picked_classifier, os.path.join(self.output_dir, 'ada_model.pkl'))
+        joblib.dump(picked_classifier, os.path.join(self.output_dir, 'classifier_4_25.pkl'))
 
         # we predict the test data
         predictions = picked_classifier.predict(x_val)
@@ -155,28 +155,19 @@ class ScalerClassifier(object):
         self.logger.info(f"Balanced accuracy: {balanced_accuracy}")
 
 
-
-    def check_percentage(self, training_data):
+    @staticmethod
+    def check_percentage(training_data):
         # we want to make sure columns Coding_density_4, Coding_density_11 and cd11_cd4_delta are between 0 and 100
         # and not between 0 and 1
 
-        # we check if the columns are between 0 and 1
-        if training_data['cd11_cd4_delta'].max() <= 1:
-            # lets multiply "cd11_cd4_delta" by 100
-            training_data['cd11_cd4_delta'] = training_data['cd11_cd4_delta'] * 100
-        if training_data['Coding_density_4'].max() <= 1:
-            # lets multiply "Coding_density_4" by 100
-            training_data['Coding_density_4'] = training_data['Coding_density_4'] * 100
-        if training_data['Coding_density_11'].max() <= 1:
-            # lets multiply "Coding_density_11" by 100
-            training_data['Coding_density_11'] = training_data['Coding_density_11'] * 100
-
-        # GC too
-        if training_data['GC'].max() <= 1:
-            training_data['GC'] = training_data['GC'] * 100
+        # we check if the columns are between 0 and 1 and if so we multiply by 100
+        for col_to_check in ['Coding_density_4', 'Coding_density_11', 'cd11_cd4_delta', 'GC']:
+            if training_data[col_to_check].max() <= 1:
+                training_data[col_to_check] = training_data[col_to_check] * 100
         return training_data
 
-    def datasplit(self,train):
+    @staticmethod
+    def datasplit(train):
         labels = train['tt_label']
         genome_list = train.Genome
         train = train.drop(['Genome', 'tt_label', 'TT', 'Ground_truth'], axis=1)
@@ -203,12 +194,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    classifier = ScalerClassifier(args.tdp, args.od, args.threads)
-    classifier.run(args.seed, args.sfs)
+    classifier = ScalerClassifier(args.tdp, args.od, args.threads,args.seed)
+    classifier.run(args.sfs)
 
-    # try:
-    #
-    # except Exception as e:
-    #     print(f"An error occurred: {e}")
-    #     sys.exit(1)
 
