@@ -31,6 +31,7 @@ from gtranslate.biolib_lite.common import remove_extension, check_dir_exists, ch
 from gtranslate.exceptions import GTranslateExit
 from gtranslate.files.batchfile import Batchfile
 from gtranslate.tbl_predictor import TablePredictor
+from gtranslate.tools import remove_intermediate_files
 
 
 class OptionsParser(object):
@@ -192,11 +193,24 @@ class OptionsParser(object):
                          options.cl25,
                          options.scale25)
 
+        if not options.keep_called_genes:
+            self.logger.info('Cleaning up intermediate files.')
+            self.remove_intermediate_files(options.out_dir, 'classify_wf')
+
         self.logger.info('Done.')
 
 
 
-
+    def remove_intermediate_files(self,out_dir,workflow_name):
+        """Remove intermediate files from the output directory.
+        Parameters
+        ----------
+            out_dir : str
+                The output directory.
+        """
+        self.logger.info('Deleting generated gene files.')
+        remove_intermediate_files(out_dir,workflow_name)
+        self.logger.info('gene files deleted.')
 
     def parse_options(self, options):
         """Parse user options and call the correct pipeline(s)

@@ -47,7 +47,7 @@ class Jellyfish(object):
 
             output, error = proc.communicate()
 
-            return output.split(' ')[1]
+            return output.strip('\n').split(' ')[1]
         except:
             return "(version unavailable)"
 
@@ -61,7 +61,7 @@ class Jellyfish(object):
 
     def _run_jellyfish_count(self, genome_file):
         # we add the extension .jf to the genome file
-        jellyfish_count_file = Path(genome_file).stem + '.jf'
+        jellyfish_count_file = Path(genome_file).with_suffix('.jf')
 
         args = ''
         if self.canonical:

@@ -1,6 +1,7 @@
 import hashlib
 import json
 import logging
+import shutil
 from typing import Optional
 
 import math
@@ -14,7 +15,7 @@ from itertools import islice
 from tqdm import tqdm
 
 
-from gtranslate.config.output import CHECKSUM_SUFFIX
+from gtranslate.config.output import CHECKSUM_SUFFIX, DIR_IDENTIFY_INTERMEDIATE
 from gtranslate.biolib_lite.seq_io import read_fasta
 
 order_rank = ["d__", "p__", "c__", "o__", 'f__', 'g__', 's__']
@@ -125,6 +126,23 @@ def symlink_f(src, dst, force=True):
     if force and os.path.isfile(dst):
         os.remove(dst)
     os.symlink(src, dst)
+
+
+def remove_intermediate_files(output_dir,wf_name):
+    """Remove intermediate files.
+
+    Parameters
+    ----------
+    output_dir : str
+        The path to the output directory.
+    wf_name : str
+        The name of the workflow to delete intermediate files.
+    """
+    #Remove predict step intermediate files
+    intermediate_identify = os.path.join(output_dir, DIR_IDENTIFY_INTERMEDIATE)
+    if os.path.exists(intermediate_identify) and os.path.isdir(intermediate_identify):
+        shutil.rmtree(intermediate_identify)
+
 
 
 class tqdm_log(object):

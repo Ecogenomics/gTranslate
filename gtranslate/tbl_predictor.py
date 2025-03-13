@@ -20,9 +20,10 @@ import os
 from gtranslate.config.common import CONFIG
 from gtranslate.biolib_lite.execute import check_dependencies
 from gtranslate.config.output import *
+from gtranslate.external.jellyfish import Jellyfish
 from gtranslate.external.prodigal import Prodigal
 from gtranslate.files.prodigal.tln_table_summary import TranslationSummaryFile, TranslationSummaryFileRow
-from gtranslate.tools import tqdm_log
+from gtranslate.tools import tqdm_log,symlink_f
 
 
 class TablePredictor(object):
@@ -95,6 +96,9 @@ class TablePredictor(object):
                                 force)
             self.logger.log(
                 CONFIG.LOG_TASK, f'Running Prodigal {prodigal.version} to identify genes.')
+
+            # version of Jellyfish
+            self.logger.log(CONFIG.LOG_TASK, f'Running Jellyfish {Jellyfish().version} to calculate kmers.')
             genome_dictionary = prodigal.run(genomes,cl11,scale11,cl25,scale25)
 
 
@@ -136,4 +140,7 @@ class TablePredictor(object):
             tln_summary_file.add_row(summary_row)
 
         tln_summary_file.write()
+
+        symlink_f(tln_summary_file.path,os.path.join(outdir,os.path.basename(tln_summary_file.path)))
+
         return True
