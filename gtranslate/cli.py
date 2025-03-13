@@ -53,7 +53,7 @@ def __keep_called_genes(group):
 
 def __extension(group):
     group.add_argument('-x', '--extension', type=str, default='fna',
-                       help='extension of files to process, ``gz`` = gzipped')
+                       help='extension of files to process, e.g., "fna", "fasta", "gz" for gzipped files')
 
 def __prefix(group):
     group.add_argument('--prefix', type=str, default='gtranslate',
@@ -81,7 +81,7 @@ def get_main_parser():
     # Setup the main, and sub parsers.
     main_parser = argparse.ArgumentParser(
         prog='gtranslate', add_help=False, conflict_handler='resolve')
-    sub_parsers = main_parser.add_subparsers(help="--", dest='subparser_name')
+    sub_parsers = main_parser.add_subparsers(title="Subcommands", help="Available subcommands", dest='subparser_name')
 
     # de novo workflow.
     with subparser(sub_parsers, 'detect_table', 'Detect the genetic translation table (GTT) used '

@@ -23,6 +23,7 @@ import subprocess
 import sys
 import tempfile
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Dict, Tuple
 
 from tqdm import tqdm
@@ -50,20 +51,12 @@ class OptionsParser(object):
 
         self.genomes_to_process = None
 
-        #Setup the Stage Logger File
-        if output_dir is not None:
-            base_name = ntpath.basename(sys.argv[0])
-            if base_name == '__main__.py':
-                prog_name = __name__.split('.')[0]
-            else:
-                prog_name = base_name
-            #timestamp_logger.info(f'{prog_name} {" ".join(sys.argv[1:])}')
 
     @staticmethod
     def _verify_file_path(file_path: str) -> bool:
         if ' ' in file_path:
-            raise GTranslateExit(f'The genome path contains a space, this is '
-                             f'unsupported by downstream applications: {file_path}')
+            raise GTranslateExit(f'Error: The genome file path contains spaces:\n{file_path}\n'
+                                 f'Rename the file or move it to a directory without spaces.')
         return True
 
     def _verify_genome_id(self, genome_id: str) -> bool:
@@ -121,6 +114,8 @@ class OptionsParser(object):
                     genomic_files[genome_id] = os.path.join(genome_dir, f)
 
         elif batchfile:
+            if not os.path.exists(batchfile):
+                raise GTranslateExit(f'Batchfile does not exist: {batchfile}')
             batchfile_fh = Batchfile(batchfile)
             genomic_files = batchfile_fh.genome_path
 
@@ -136,7 +131,7 @@ class OptionsParser(object):
         invalid_paths = list()
         for genome_key, genome_path in genomic_files.items():
 
-            if not os.path.isfile(genome_path):
+            if not Path(genome_path).exists():
                 invalid_paths.append((genome_key, genome_path))
 
         # Report on any invalid paths
@@ -151,12 +146,11 @@ class OptionsParser(object):
 
         if len(genomic_files) == 0:
             if genome_dir:
-                self.logger.error('No genomes found in directory: %s. Check '
-                                  'the --extension flag used to identify '
-                                  'genomes.' % genome_dir)
+                self.logger.error(f'No genomes found in directory: {genome_dir}. '
+                                  f'Check the --extension flag or verify that the directory contains the expected files.')
             else:
-                self.logger.error('No genomes found in batch file: %s. Please '
-                                  'check the format of this file.' % batchfile)
+                self.logger.error(f'No genomes found in batch file: {batchfile}. '
+                                  f'Ensure the batch file is formatted correctly.')
             raise GTranslateExit
 
         return genomic_files
@@ -207,7 +201,12 @@ class OptionsParser(object):
         ----------
             out_dir : str
                 The output directory.
+            workflow_name : str
+                The name of the workflow that generated the intermediate files.
         """
+        if not os.path.exists(out_dir):
+            self.logger.warning(f'Output directory does not exist: {out_dir}. Skipping cleanup.')
+            return
         self.logger.info('Deleting generated gene files.')
         remove_intermediate_files(out_dir,workflow_name)
         self.logger.info('gene files deleted.')
@@ -238,8 +237,6 @@ class OptionsParser(object):
         if options.subparser_name == 'detect_table':
             self.detect_table(options)
         else:
-            self.logger.error('Unknown gTranslate command: "' +
-                              options.subparser_name + '"\n')
-            sys.exit(1)
+            raise GTranslateExit(f'Unknown gTranslate command: {options.subparser_name}')
 
         return 0

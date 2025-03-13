@@ -46,8 +46,8 @@ class TablePredictor(object):
 
     def predict(self, genomes, out_dir, prefix, force,cl11=None,scale11=None,
                 cl25=None,scale25=None):
-            """Call Prodigal with TT 4 and 11 to identify genome profiles.
-
+            """Call Prodigal with TT 4 and 11 to identify genome profiles. Run Jellyfish to calculate kmers.
+            Calculate the probability of each genome to be translated with TT 4/11 and TT 4/25.
 
             Parameters
             ----------
@@ -59,18 +59,21 @@ class TablePredictor(object):
                 Prefix to append to generated files.
             force : bool
                 Overwrite any existing files.
-            genes : bool
-                True if the supplied genomes are called genes, False otherwise.
-            write_single_copy_genes : bool
-                Write unique AR53/BAC120 marker files to disk.
+            cl11 : optional
+                Custom classifier 4/11.
+            scale11 : optional
+                Custom scaler 4/11.
+            cl25 : optional
+                Custom classifier 4/25.
+            scale25 : optional
+                Custom scaler 4/25.
 
-            Raises
-            ------
-            GTDBTkException
-                If an exception is encountered during the identify step.
-
+            Returns
+            -------
+            bool
+                True if the process completes successfully.
             """
-            check_dependencies(['prodigal'])
+            check_dependencies(['prodigal'], exit_on_fail=True)
 
             if cl11:
                 self.logger.info(f'Custom classifier 4/11 : {cl11}')

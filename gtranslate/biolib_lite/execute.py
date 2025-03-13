@@ -14,8 +14,9 @@
 #    along with this program. If not, see <http://www.gnu.org/licenses/>.     #
 #                                                                             #
 ###############################################################################
-
+import logging
 import os
+import shutil
 import subprocess
 import sys
 
@@ -105,26 +106,27 @@ def which(program):
 
 
 def check_on_path(program, exit_on_fail=True):
-    """Check if program is on the system path.
+    """Check if a program is available on the system path.
 
     Parameters
     ----------
     program : str
-        Name of executable for program.
-    exit_on_fail : boolean
-        Exit program with error code -1 if program in not on path.
+        Name of the executable to check.
+    exit_on_fail : bool, optional
+        If True, exit the program if the executable is not found.
 
     Returns
     -------
-    boolean
-        True if program is on path, else False.
+    bool
+        True if the program is found, False otherwise.
     """
-
-    if which(program):
+    logger = logging.getLogger("timestamp")
+    if shutil.which(program):
         return True
 
+    logger.error(f"Dependency missing: {program} is not found on the system path.")
     if exit_on_fail:
-        print('%s is not on the system path.' % program)
+        logger.critical("Missing critical dependency. Exiting.")
         sys.exit(1)
 
     return False
@@ -136,17 +138,22 @@ def check_dependencies(programs, exit_on_fail=True):
     Parameters
     ----------
     programs : iterable
-        Names of executable programs.
-    exit_on_fail : boolean
-        Exit program with error code -1 if any program in not on path.
+        Names of executable programs to check.
+    exit_on_fail : bool, optional
+        If True, exit the program with error code -1 if any program is not on path.
 
     Returns
     -------
-    boolean
+    bool
         True if all programs are on path, else False.
     """
+    logger = logging.getLogger("timestamp")
 
+    all_found = True
     for program in programs:
         if not check_on_path(program, exit_on_fail):
-            return False
-    return True
+            all_found = False
+
+    if all_found:
+        logger.info("All dependencies are correctly installed.")
+    return all_found
