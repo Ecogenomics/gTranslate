@@ -101,7 +101,7 @@ class TablePredictor(object):
                 CONFIG.LOG_TASK, f'Running Prodigal {prodigal.version} to identify genes.')
 
             # version of Jellyfish
-            self.logger.log(CONFIG.LOG_TASK, f'Running Jellyfish {Jellyfish().version} to calculate kmers.')
+            self.logger.log(CONFIG.LOG_TASK, f'Running Jellyfish V{Jellyfish().version} to calculate kmers.')
             genome_dictionary = prodigal.run(genomes,cl11,scale11,cl25,scale25)
 
 

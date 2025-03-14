@@ -28,7 +28,7 @@ class TranslationSummaryFileRow:
     # db_genome_id, info.get("best_translation_table"), info.get("coding_density_4"),
     # info.get("coding_density_11"), info.get("gc_percent"), info.get("n50"),
     # info.get("genome_size"), info.get("contig_count"), info.get("probability_4_11"),
-    # info.get("probability_4_25", "NA"))
+    # info.get("probability_4_25", "N/A"))
 
     __slots__ = ('gid', 'best_tln_table', 'coding_density_4', 'coding_density_11',
                  'gc_percent', 'n50', 'genome_size', 'contig_count', 'probability_4_11',
@@ -109,7 +109,13 @@ class TranslationSummaryFile(object):
             for gid, row in sorted(self.rows.items()):
                 buf = list()
                 for idx,data in enumerate(self.get_col_order(row)[1]):
-                    # for the red_value field, we want to round the data to 5 decimals after the comma if the value is not None
+                    # if data can be cast to a float, we want to round the data to 5 decimals after the comma if the value is not None
+                    try:
+                        # if data can be cast to an int, we want to keep the data as an int
+                        if data is not None and  not float(data).is_integer():
+                            data = round(float(data), 5)
+                    except ValueError:
+                        pass
                     buf.append(self.none_value if data is None else str(data))
                 fh.write('\t'.join(buf) + '\n')
 

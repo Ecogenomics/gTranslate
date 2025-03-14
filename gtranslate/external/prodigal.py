@@ -20,6 +20,9 @@ import multiprocessing as mp
 import os
 import shutil
 import subprocess
+from time import sleep
+
+from tqdm import tqdm
 
 from gtranslate.biolib_lite.prodigal_biolib import Prodigal as BioLibProdigal
 from gtranslate.config.output import CHECKSUM_SUFFIX
@@ -158,12 +161,13 @@ class Prodigal(object):
             genome_id, file_path,cl11,scale11,cl25,scale25 = data
 
             rtn_files = self._run_prodigal(genome_id, file_path,cl11,scale11,cl25,scale25)
+            was_skipped = False
 
             # Only proceed if an error didn't occur in BioLib Prodigal
             if rtn_files:
                 aa_gene_file, nt_gene_file, gff_file, translation_table_file,was_skipped,is_empty = rtn_files
                 if was_skipped:
-                    print(f'{genome_id} was skipped')
+                    #print(f'{genome_id} was skipped')
                     with n_skipped.get_lock():
                         n_skipped.value += 1
                 prodigal_infos = {"aa_gene_path": aa_gene_file,
@@ -182,13 +186,19 @@ class Prodigal(object):
                                   "is_empty": is_empty}
 
                 out_dict[genome_id] = prodigal_infos
-            writer_queue.put(genome_id)
+            writer_queue.put((genome_id,was_skipped))
 
     def _writer(self, num_items, writer_queue):
         """Store or write results of worker threads in a single thread."""
-        with tqdm_log(total=num_items,  unit='genome') as p_bar:
-            for _ in iter(writer_queue.get, None):
+        with tqdm_log(total=num_items, unit='genome') as p_bar:
+            for item in iter(writer_queue.get, None):  # Receive each item from the queue
                 p_bar.update()
+                try:
+                    genome_id, was_skipped = item  # Unpack the tuple (genome_id, was_skipped)
+                    if was_skipped:
+                        p_bar.set_postfix({"skipped": f"{genome_id}"}, refresh=True)  # Update progress bar with skipped message
+                except ValueError:
+                    pass  # Handle unexpected item structures gracefully
 
     def run(self, genomic_files,cl11,scale11,cl25,scale25):
         """Run Prodigal across a set of genomes.

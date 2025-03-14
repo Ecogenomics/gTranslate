@@ -10,7 +10,10 @@ class CustomLogger:
             log_filename = Path(log_filename).stem
             log_filename = log_filename + ".log"
         self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.output_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            raise RuntimeError(f"Failed to create log directory: {e}")
 
         # Set up the log file path within the output directory
         self.log_file = self.output_dir / log_filename

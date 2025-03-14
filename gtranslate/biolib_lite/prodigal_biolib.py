@@ -58,7 +58,7 @@ class ConsumerData:
         for key, value in self.metadata.items():
             setattr(self, key, value) # Dynamically add metadata keys as attributes
         if 'probability_4_25' not in self.metadata:
-            self.probability_4_25 = 'NA'
+            self.probability_4_25 = 'N/A'
 
 
 
@@ -180,7 +180,7 @@ class Prodigal(object):
                 #we add the difference aa
 
                 classifier_4_11 = Classifier_4_11(self.cl11,self.scale11)
-                best_translation_table,probability_4_11 = classifier_4_11.get_translation_table(temp_df)
+                best_translation_table,probability_4_11 = classifier_4_11.predict_translation_table(temp_df)
                 genome_metadata_dict['probability_4_11'] = probability_4_11
 
                 # if the best translation table is 4, we need to check if its 4 or actually 25
@@ -203,7 +203,7 @@ class Prodigal(object):
 
 
                     classifier_25 = Classifier_25(self.cl25,self.scale25)
-                    best_translation_table,probability_4_25 = classifier_25.get_translation_table(temp_df)
+                    best_translation_table,probability_4_25 = classifier_25.predict_translation_table(temp_df)
                     genome_metadata_dict['probability_4_25'] = probability_4_25
                 genome_metadata_dict['best_tln_table'] = best_translation_table
 

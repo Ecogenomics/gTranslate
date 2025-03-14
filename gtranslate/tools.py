@@ -159,7 +159,7 @@ class tqdm_log(object):
         default = {'leave': False,
                    'smoothing': 0.1,
                    'bar_format': '==> Processed {n_fmt}/{total_fmt} {unit}s '
-                                 '({percentage:.0f}%) |{bar:15}| [{rate_fmt}, ETA {remaining}]'}
+                                 '({percentage:.0f}%) |{bar:15}| [{rate_fmt}, ETA {remaining}] {postfix}'}
         merged = {**default, **kwargs}
         self.args = merged
 
@@ -203,6 +203,7 @@ class tqdm_log(object):
             self.logger.info(msg)
         except Exception:
             pass
+
 
     def __enter__(self):
         self.start_ts = time.time()
