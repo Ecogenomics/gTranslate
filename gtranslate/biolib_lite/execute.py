@@ -147,13 +147,7 @@ def check_dependencies(programs, exit_on_fail=True):
     bool
         True if all programs are on path, else False.
     """
-    logger = logging.getLogger("timestamp")
-
-    all_found = True
     for program in programs:
         if not check_on_path(program, exit_on_fail):
-            all_found = False
-
-    if all_found:
-        logger.info("All dependencies are correctly installed.")
-    return all_found
+            return False
+    return True

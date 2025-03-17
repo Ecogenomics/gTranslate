@@ -103,4 +103,16 @@ def get_main_parser():
             __cl25(grp)
             __scale25(grp)
 
+    with subparser(sub_parsers, 'test', 'Validate detection of the genetic translation table (GTT) '
+                                       'used in prokaryotic organisms.') as parser:
+        with arg_group(parser, 'optional arguments') as grp:
+            __out_dir(grp, required=False)
+            __temp_dir(grp)
+            __cpus(grp)
+            __help(grp)
+
+    with subparser(sub_parsers, 'check_install', 'Check the installation of the required dependencies.') as parser:
+        with arg_group(parser, 'optional arguments') as grp:
+            __help(grp)
+
     return main_parser

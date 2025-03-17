@@ -73,7 +73,7 @@ class TablePredictor(object):
             bool
                 True if the process completes successfully.
             """
-            check_dependencies(['prodigal'], exit_on_fail=True)
+            check_dependencies(['prodigal','jellyfish','toto'], exit_on_fail=True)
 
             if cl11:
                 self.logger.info(f'Custom classifier 4/11 : {cl11}')
@@ -144,6 +144,8 @@ class TablePredictor(object):
 
         tln_summary_file.write()
 
-        symlink_f(tln_summary_file.path,os.path.join(outdir,os.path.basename(tln_summary_file.path)))
+        #we remove the the outdir from the path to get a relative path
+        relative_path = os.path.relpath(tln_summary_file.path, outdir)
+        symlink_f(relative_path,os.path.join(outdir,os.path.basename(tln_summary_file.path)),force=True)
 
         return True

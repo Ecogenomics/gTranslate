@@ -36,7 +36,8 @@ def print_help():
     detect_table  -> Detect the genetic translation table (GTT) used in prokaryotic organisms.
 
   Testing:
-    test          -> Validate the classify_wf pipeline with 3 archaeal genomes 
+    test          -> Validate detection of the genetic translation table (GTT) used in prokaryotic organisms.
+    check_install -> Check the installation of gTranslate.
 
   Use: gtranslate <command> -h for command specific help 
     ''' % __version__)

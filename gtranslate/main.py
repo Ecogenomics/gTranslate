@@ -31,6 +31,8 @@ from tqdm import tqdm
 from gtranslate.biolib_lite.common import remove_extension, check_dir_exists, check_file_exists, make_sure_path_exists
 from gtranslate.exceptions import GTranslateExit
 from gtranslate.files.batchfile import Batchfile
+from gtranslate.files.prodigal.tln_table_summary import TranslationSummaryFile
+from gtranslate.misc import Misc
 from gtranslate.tbl_predictor import TablePredictor
 from gtranslate.tools import remove_intermediate_files
 
@@ -193,6 +195,86 @@ class OptionsParser(object):
 
         self.logger.info('Done.')
 
+    def run_test(self, options):
+        """Run the test suite. To make sure the program is working as expected.
+        """
+
+        # Use a temporary directory if none is supplied.
+        if options.out_dir:
+            out_dir_fh = None
+            make_sure_path_exists(options.out_dir)
+        else:
+            out_dir_fh = tempfile.TemporaryDirectory(prefix='gtranslate_tmp_')
+            options.out_dir = out_dir_fh.name
+            self.logger.info('Using a temporary directory as out_dir was not specified.')
+
+        try:
+            output_dir = os.path.join(options.out_dir, 'output')
+            genome_test_dir = os.path.join(options.out_dir, 'genomes')
+            if os.path.exists(genome_test_dir):
+                self.logger.error(f'Test directory {genome_test_dir} already exists.')
+                self.logger.error('Test must be run in a new directory.')
+                sys.exit(1)
+
+            current_path = os.path.dirname(os.path.realpath(__file__))
+            input_dir = os.path.join(current_path, 'tests', 'data', 'genomes')
+
+            shutil.copytree(input_dir, genome_test_dir)
+
+            args = ['gtranslate', 'detect_table', '--genome_dir', genome_test_dir,
+                    '--out_dir', output_dir, '--cpus', str(options.cpus)]
+            self.logger.info('Command: {}'.format(' '.join(args)))
+
+            # Pipe the output and write to disk.
+            path_stdout = os.path.join(options.out_dir, 'test_execution.log')
+            with subprocess.Popen(args, stdout=subprocess.PIPE,
+                                  stderr=subprocess.PIPE, encoding='utf-8') as proc:
+                with open(path_stdout, 'w') as fh_stdout:
+                    bar_fmt = ' <TEST OUTPUT> '.center(22) + '{desc}'
+                    with tqdm(bar_format=bar_fmt, leave=False) as p_bar:
+                        while True:
+                            line = proc.stdout.readline()
+                            if not line:
+                                break
+                            fh_stdout.write(f'{line}')
+                            p_bar.set_description_str(line.strip())
+                proc.wait()
+                exit_code = proc.returncode
+
+            summary_fh = TranslationSummaryFile(output_dir, 'gtranslate')
+
+            if exit_code != 0:
+                self.logger.error('The test returned a non-zero exit code.')
+                self.logger.error('A detailed summary of the execution log can be '
+                                  'found here: {}'.format(path_stdout))
+                self.logger.error('The test has failed.')
+                sys.exit(1)
+            if not os.path.exists(summary_fh.path):
+                self.logger.error(f"{summary_fh.path} is missing.")
+                self.logger.error('A detailed summary of the execution log can be '
+                                  'found here: {}'.format(path_stdout))
+                self.logger.error('The test has failed.')
+                sys.exit(1)
+        finally:
+            if out_dir_fh:
+                out_dir_fh.cleanup()
+
+        self.logger.info('Test has successfully finished.')
+        return True
+
+    def check_install(self,options):
+        """ Verify all GTDB-Tk data files are present.
+
+        Raises
+        ------
+        ReferenceFileMalformed
+            If one or more reference files are malformed.
+        """
+        self.logger.info("Running install verification")
+        misc = Misc()
+        misc.check_install()
+        self.logger.info('Done.')
+
 
 
     def remove_intermediate_files(self,out_dir,workflow_name):
@@ -236,6 +318,10 @@ class OptionsParser(object):
 
         if options.subparser_name == 'detect_table':
             self.detect_table(options)
+        elif options.subparser_name == 'test':
+            self.run_test(options)
+        elif options.subparser_name == 'check_install':
+            self.check_install(options)
         else:
             raise GTranslateExit(f'Unknown gTranslate command: {options.subparser_name}')
 
