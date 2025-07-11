@@ -40,6 +40,9 @@ class GenericTableClassifier:
     def classify_table(self, data : pd.DataFrame) -> tuple[int, float]:
         """Classify the input data, returning (class, probability)."""
         classifier = self.load_model(self.classifier_path)
+        # I want to make the classifier non verbose
+        if hasattr(classifier, 'verbose'):
+            classifier.verbose = 0
         # The classifier is train on a specific subset of columns so we need to make sure the data has the same columns
         trimmed_data = data.reindex(columns=classifier.feature_names_in_, fill_value=0)
         probabilities = classifier.predict_proba(trimmed_data)

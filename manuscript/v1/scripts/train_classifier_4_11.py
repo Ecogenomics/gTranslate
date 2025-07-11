@@ -57,8 +57,22 @@ warnings.simplefilter("ignore")
 
 
 class ScalerClassifier(object):
+    """
+    A class to train a classifier on genomic feature data, including feature scaling,
+    optional feature selection, and model persistence.
+
+    Attributes:
+        training_data (pd.DataFrame): The input training dataset.
+        output_dir (str): Output directory to store models and logs.
+        seed (int): Random seed for reproducibility.
+        thread_count (int): Number of threads to use for parallel tasks.
+        logger (Logger): Custom logger for tracking events.
+    """
 
     def __init__(self, train_data_path, output_dir, threads_count, seed=None):
+
+        if not os.path.isfile(train_data_path):
+            raise FileNotFoundError(f"Training data file not found: {train_data_path}")
 
         # Initialize the logger
         logger_instance = CustomLogger(output_dir, __prog_name__)
@@ -67,6 +81,10 @@ class ScalerClassifier(object):
         self.seed = seed
         self.thread_count = threads_count
         self.training_data = pd.read_csv(train_data_path, sep='\t')
+        required_cols = ['Coding_density_4', 'Coding_density_11', 'cd11_cd4_delta', 'GC', 'Genome', 'tt_label']
+        missing_columns = [col for col in required_cols if col not in self.training_data.columns]
+        if missing_columns:
+            raise ValueError(f"The following required columns are missing from the input data: {missing_columns}")
         self.training_data = self.check_percentage(self.training_data)
         self.output_dir = output_dir
         # make sure the output directory exists
@@ -88,7 +106,14 @@ class ScalerClassifier(object):
                            'GTAA', 'GTAC', 'GTCA', 'GTGA', 'GTTA', 'TAAA', 'TACA', 'TAGA', 'TATA', 'TCAA', 'TCCA',
                            'TCGA', 'TGAA', 'TGCA', 'TTAA']
 
-    def run(self, sfs=False):
+    def run(self, sfs=False, split_data=False):
+        """
+        Execute the full training pipeline.
+
+        Args:
+            sfs (bool): Whether to apply Sequential Feature Selection.
+            split_data (bool): Whether to split the data into training and validation sets.
+        """
         self.logger.info(f'{__prog_name__} {" ".join(sys.argv[1:])}')
 
         # Set the seed only when `run()` is called
@@ -113,7 +138,11 @@ class ScalerClassifier(object):
         self.training_data[columns_to_fit] = scaler.fit_transform(self.training_data[columns_to_fit])
 
         # save the scaler to disk
-        joblib.dump(scaler, os.path.join(self.output_dir, 'scaler_4_11.pkl'))
+        try:
+            joblib.dump(scaler, os.path.join(self.output_dir, 'scaler_4_11.pkl'))
+        except Exception as e:
+            self.logger.error(f"Error saving scaler: {e}")
+            raise
 
         # # show the mean and standard deviation of the training data Coding_density_4,
         self.logger.info(f"Mean of Coding_density_4: {self.training_data['Coding_density_4'].mean()}")
@@ -127,8 +156,20 @@ class ScalerClassifier(object):
         weights_dict = dict(enumerate(class_weights))
         self.logger.info(f"Class weights: {json.dumps(weights_dict)}")
 
+        #Parameters for the classifier
+        CLASS_WEIGHT = 'balanced'
+        NESTIMATORS = 250
+        MIN_SAMPLES_LEAF = 2
+
         # TODO : we may have to change the classifier/scaler based on results of the analysis and change the range of feature if we want
-        picked_classifier = RandomForestClassifier(verbose=1,n_jobs=40,class_weight=weights_dict,n_estimators=100,random_state=42)
+        picked_classifier = RandomForestClassifier(verbose=1,n_jobs=self.thread_count,
+                                                   class_weight=CLASS_WEIGHT,n_estimators=NESTIMATORS,
+                                                    min_samples_leaf=MIN_SAMPLES_LEAF,random_state=seed_to_use)
+
+        self.logger.info(f'Training the classifier with {picked_classifier.n_estimators} trees, '
+                         f'class weight: {picked_classifier.class_weight}, '
+                         f'min samples leaf: {picked_classifier.min_samples_leaf}')
+
 
         if sfs:
             sss = StratifiedKFold(n_splits=5, random_state=seed_to_use, shuffle=True)
@@ -143,15 +184,26 @@ class ScalerClassifier(object):
             self.logger.info(f"Selected features: {selected_features_names}")
             train = train[selected_features_names]
 
-
-
-        x_train, x_val, y_train, y_val = train_test_split(train, labels, test_size=0.2, stratify=labels,
-                                                          random_state=seed_to_use)
-        self.logger.info(f"Training data shape: {x_train.shape}")
+        if split_data:
+            # we split the data into training and validation sets
+            self.logger.info("Splitting the data into training and validation sets")
+            x_train, x_val, y_train, y_val = train_test_split(train, labels, test_size=0.2, stratify=labels,
+                                                              random_state=seed_to_use)
+            self.logger.info(f"Training data shape: {x_train.shape}")
+        else:
+            self.logger.info("Using the full training data")
+            x_train = train
+            y_train = labels
+            x_val = train
+            y_val = labels
 
         picked_classifier.fit(x_train, y_train)
 
-        joblib.dump(picked_classifier, os.path.join(self.output_dir, 'ada_4_11.pkl'))
+        try:
+            joblib.dump(picked_classifier, os.path.join(self.output_dir, 'rf_4_11.pkl'))
+        except Exception as e:
+            self.logger.error(f"Error saving classifier: {e}")
+            raise
 
         # we predict the test data
         predictions = picked_classifier.predict(x_val)
@@ -162,6 +214,17 @@ class ScalerClassifier(object):
 
     @staticmethod
     def check_percentage(training_data):
+        """
+            Ensure coding density and GC content columns are percentages (0–100 range).
+            Multiplies values by 100 if they appear to be in 0–1 range.
+
+            Args:
+                training_data (pd.DataFrame): The dataset to check and correct.
+
+            Returns:
+                pd.DataFrame: Corrected dataset with appropriate value ranges.
+            """
+
         # we want to make sure columns Coding_density_4, Coding_density_11 and cd11_cd4_delta are between 0 and 100
         # and not between 0 and 1
 
@@ -173,6 +236,15 @@ class ScalerClassifier(object):
 
     @staticmethod
     def datasplit(train):
+        """
+            Split the dataset into features and labels, excluding metadata columns.
+
+            Args:
+                train (pd.DataFrame): Full training dataframe including genome and label columns.
+
+            Returns:
+                tuple: A tuple of (features dataframe, labels series, genome list)
+            """
         labels = train['tt_label']
         genome_list = train.Genome
         train = train.drop(['Genome', 'tt_label', 'TT', 'Ground_truth'], axis=1)
@@ -197,8 +269,15 @@ if __name__ == "__main__":
     # add a flag to enable the SequentialFeatureSelector
     parser.add_argument('-sfs', '--sequential_feature_selector', dest="sfs",
                         action='store_true', help='Enable the SequentialFeatureSelector.')
+    # add a flag to split or not the data
+    parser.add_argument('--split_data', dest="split_data", action='store_true',
+                        help='Enable data splitting into training and validation sets.')
 
     args = parser.parse_args()
 
-    classifier = ScalerClassifier(args.tdp, args.od, args.threads, args.seed)
-    classifier.run(args.sfs)
+    try:
+        classifier = ScalerClassifier(args.tdp, args.od, args.threads, args.seed)
+        classifier.run(args.sfs, args.split_data)
+    except Exception as e:
+        print(f"ERROR: {str(e)}", file=sys.stderr)
+        sys.exit(1)

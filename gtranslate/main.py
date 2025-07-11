@@ -131,8 +131,7 @@ class OptionsParser(object):
 
         # Check that the prefix is valid and the path exists
         invalid_paths = list()
-        for genome_key, genome_path in genomic_files.items():
-
+        for genome_key, genome_path in tqdm(genomic_files.items(), desc="Checking paths",ncols=100):
             if not Path(genome_path).exists():
                 invalid_paths.append((genome_key, genome_path))
 
