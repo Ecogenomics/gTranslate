@@ -35,7 +35,7 @@ class __GTranslateCommonConfig:
         # Get the path to the current directory where common.py is located
         current_dir = os.path.dirname(__file__)
         # Build the path to classifiers/classifier.model.pkl
-        classifier_model_path = os.path.join(current_dir, '..', 'classifiers', 'classifier_models','ada_4_11.pkl')
+        classifier_model_path = os.path.join(current_dir, '..', 'classifiers', 'classifier_models','classifier_4_11.pkl')
         # Resolve the path to its absolute form
         classifier_model_path = os.path.abspath(classifier_model_path)
         return classifier_model_path
@@ -55,7 +55,7 @@ class __GTranslateCommonConfig:
         # Get the path to the current directory where common.py is located
         current_dir = os.path.dirname(__file__)
         # Build the path to classifiers/classifier.model.pkl
-        classifier_model_path = os.path.join(current_dir, '..', 'classifiers', 'classifier_models','ada_4_25.pkl')
+        classifier_model_path = os.path.join(current_dir, '..', 'classifiers', 'classifier_models','classifier_4_25.pkl')
         # Resolve the path to its absolute form
         classifier_model_path = os.path.abspath(classifier_model_path)
         return classifier_model_path
