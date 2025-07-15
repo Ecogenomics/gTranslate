@@ -140,6 +140,18 @@ class TablePredictor(object):
             summary_row.contig_count = info.get("contig_count")
             summary_row.probability_4_11 = info.get("probability_4_11")
             summary_row.probability_4_25 = info.get("probability_4_25","N/A")
+            # we add the warnings if there are any
+            warnings_list = []
+            if float(info.get("probability_4_11")) < 0.7:
+                warnings_list.append(
+                    f'Low probability for translation table 4/11')
+            if "probability_4_25" in info.get("probability_4_25") != 'N/A' and float(info.get("probability_4_25")) < 0.7:
+                warnings_list.append(
+                    f'Low probability for translation table 4/25')
+            if float(info.get("coding_density_4")) < 70 and float(info.get("coding_density_11")) < 70:
+                warnings_list.append("Low coding density for both table 4 and 11")
+            if len(warnings_list) > 0:
+                summary_row.warnings = warnings_list
             tln_summary_file.add_row(summary_row)
 
         tln_summary_file.write()

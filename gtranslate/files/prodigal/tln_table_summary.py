@@ -32,7 +32,7 @@ class TranslationSummaryFileRow:
 
     __slots__ = ('gid', 'best_tln_table', 'coding_density_4', 'coding_density_11',
                  'gc_percent', 'n50', 'genome_size', 'contig_count', 'probability_4_11',
-                 'probability_4_25')
+                 'probability_4_25','warnings')
 
     def __init__(self):
         """Initialise the row, default all the values to None."""
@@ -46,17 +46,20 @@ class TranslationSummaryFileRow:
         self.contig_count: Optional[int] = None
         self.probability_4_11: Optional[float] = None
         self.probability_4_25: Optional[str] = None
+        self.warnings: Optional[List[str]] = None
+
 
 
 
 class TranslationSummaryFile(object):
     """Records the translation table for one or more genomes."""
-    __slots__ = ('path', 'rows')
+    __slots__ = ('path', 'rows', 'none_value')
 
     def __init__(self, out_dir: str, prefix: str):
         """Configure paths and initialise storage dictionary."""
         self.path: str = os.path.join(out_dir, PATH_TLN_TABLE_SUMMARY.format(prefix=prefix))
         self.rows: Dict[str, TranslationSummaryFileRow] = dict()
+        self.none_value = 'N/A'  # Value to use for None values in the file.
 
     @staticmethod
     def get_col_order(row: TranslationSummaryFileRow = None) -> Tuple[List[str], List[Union[str, float, int]]]:
@@ -73,7 +76,8 @@ class TranslationSummaryFile(object):
                      ('genome_size', row.genome_size),
                      ('contig_count', row.contig_count),
                      ('probability_4_11', row.probability_4_11),
-                     ('probability_4_25', row.probability_4_25)]
+                     ('probability_4_25', row.probability_4_25),
+                     ('warnings', row.warnings)]
         cols, data = list(), list()
         for col_name, col_val in mapping:
             cols.append(col_name)
@@ -106,30 +110,30 @@ class TranslationSummaryFile(object):
         make_sure_path_exists(os.path.dirname(self.path))
         with open(self.path, 'w') as fh:
             fh.write('\t'.join(self.get_col_order()[0]) + '\n')
+            header, values = self.get_col_order()
             for gid, row in sorted(self.rows.items()):
-                buf = list()
-                for idx,data in enumerate(self.get_col_order(row)[1]):
-                    # if data can be cast to a float, we want to round the data to 5 decimals after the comma if the value is not None
-                    try:
-                        # if data can be cast to an int, we want to keep the data as an int
-                        if data is not None and  not float(data).is_integer():
-                            data = round(float(data), 5)
-                    except ValueError:
-                        pass
-                    buf.append(self.none_value if data is None else str(data))
+                row_values = self.get_col_order(row)[1]
+                buf = []
+
+                for col_name, value in zip(header, row_values):
+                    # Special case for 'warnings' column
+                    if col_name == 'warnings' and isinstance(value, list):
+                        value = ';'.join(value)
+
+                    if value is not None:
+                        try:
+                            fval = float(value)
+                            if not fval.is_integer():
+                                value = round(fval, 5)
+                            else:
+                                value = fval
+                        except (ValueError, TypeError):
+                            pass  # Not a float-compatible value, leave as-is
+                    buf.append(self.none_value if value is None else str(value))
+
                 fh.write('\t'.join(buf) + '\n')
 
 
-
-    def read(self):
-        """Read the translation table summary file from disk."""
-        if len(self.genomes) > 0:
-            raise GTranslateExit(f'Warning! Attempting to override in-memory values '
-                             f'for translation table summary file: {self.path}')
-        with open(self.path, 'r') as fh:
-            for line in fh.readlines():
-                gid, tbl = line.strip().split('\t')
-                self.genomes[gid] = str(tbl)
 
     def read(self):
         """Read the summary file from disk."""
@@ -145,16 +149,17 @@ class TranslationSummaryFile(object):
 
             # Process the data.
             for line in fh.readlines():
-                data = line.strip().split('\t')
+                data = line.strip('\n').split('\t')
                 row = TranslationSummaryFileRow()
                 row.gid = data[0]
-                row.best_tln_table = data[1]
-                row.coding_density_4 = data[2]
-                row.coding_density_11 = data[3]
-                row.gc_percent = data[4]
-                row.n50 = data[5]
-                row.genome_size = data[6]
-                row.contig_count = data[7]
-                row.probability_4_11 = data[8]
+                row.best_tln_table = int(data[1])
+                row.coding_density_4 = float(data[2])
+                row.coding_density_11 = float(data[3])
+                row.gc_percent = float(data[4])
+                row.n50 = int(data[5])
+                row.genome_size = int(data[6])
+                row.contig_count = int(data[7])
+                row.probability_4_11 = float(data[8])
                 row.probability_4_25 = data[9]
+                row.warnings = data[10].split(';') if data[10] else []
                 self.add_row(row)
