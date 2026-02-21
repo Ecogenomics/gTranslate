@@ -182,11 +182,7 @@ class OptionsParser(object):
         reports = table_predictor.predict(genomes,
                          options.out_dir,
                          options.prefix,
-                         options.force,
-                         options.cl11,
-                         options.scale11,
-                         options.cl25,
-                         options.scale25)
+                         options.force)
 
         if not options.keep_called_genes:
             self.logger.info('Cleaning up intermediate files.')

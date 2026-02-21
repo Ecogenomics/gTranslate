@@ -44,8 +44,7 @@ class TablePredictor(object):
         self.cpus = cpus
         self.debug = debug
 
-    def predict(self, genomes, out_dir, prefix, force,cl11=None,scale11=None,
-                cl25=None,scale25=None):
+    def predict(self, genomes, out_dir, prefix, force):
             """Call Prodigal with TT 4 and 11 to identify genome profiles. Run Jellyfish to calculate kmers.
             Calculate the probability of each genome to be translated with TT 4/11 and TT 4/25.
 
@@ -73,16 +72,7 @@ class TablePredictor(object):
             bool
                 True if the process completes successfully.
             """
-            check_dependencies(['prodigal','jellyfish'], exit_on_fail=True)
-
-            if cl11:
-                self.logger.info(f'Custom classifier 4/11 : {cl11}')
-            if scale11:
-                self.logger.info(f'Custom scaler 4/11 : {scale11}')
-            if cl25:
-                self.logger.info(f'Custom classifier 4/25 : {cl25}')
-            if scale25:
-                self.logger.info(f'Custom scaler 4/25 : {scale25}')
+            check_dependencies(['prodigal'], exit_on_fail=True)
 
             reports = {}
             self.called_gene_dir = os.path.join(out_dir, DIR_PREDICT_GENES)
@@ -100,9 +90,7 @@ class TablePredictor(object):
             self.logger.log(
                 CONFIG.LOG_TASK, f'Running Prodigal {prodigal.version} to identify genes.')
 
-            # version of Jellyfish
-            self.logger.log(CONFIG.LOG_TASK, f'Running Jellyfish V{Jellyfish().version} to calculate kmers.')
-            genome_dictionary = prodigal.run(genomes,cl11,scale11,cl25,scale25)
+            genome_dictionary = prodigal.run(genomes)
 
 
             gene_files = [(db_genome_id, genome_dictionary[db_genome_id]['aa_gene_path'])
@@ -138,18 +126,8 @@ class TablePredictor(object):
             summary_row.n50 = info.get("n50")
             summary_row.genome_size = info.get("genome_size")
             summary_row.contig_count = info.get("contig_count")
-            summary_row.probability_4_11 = info.get("probability_4_11")
-            summary_row.probability_4_25 = info.get("probability_4_25","N/A")
             # we add the warnings if there are any
             warnings_list = []
-            if float(info.get("probability_4_11")) < 0.7:
-                warnings_list.append(
-                    f'Low probability for translation table 4/11')
-            if "probability_4_25" in info.get("probability_4_25") != 'N/A' and float(info.get("probability_4_25")) < 0.7:
-                warnings_list.append(
-                    f'Low probability for translation table 4/25')
-            if float(info.get("coding_density_4")) < 70 and float(info.get("coding_density_11")) < 70:
-                warnings_list.append("Low coding density for both table 4 and 11")
             if len(warnings_list) > 0:
                 summary_row.warnings = warnings_list
             tln_summary_file.add_row(summary_row)

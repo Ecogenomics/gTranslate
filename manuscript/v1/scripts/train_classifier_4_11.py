@@ -36,6 +36,8 @@ import argparse
 import json
 import os
 import sys
+from tabnanny import verbose
+
 import joblib
 
 import numpy as np
@@ -44,6 +46,7 @@ from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 from sklearn.metrics import balanced_accuracy_score
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.preprocessing import StandardScaler
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.utils import compute_class_weight
 
 from mlxtend.feature_selection import SequentialFeatureSelector
@@ -120,7 +123,7 @@ class ScalerClassifier(object):
         seed_to_use = self.seed if self.seed is not None else np.random.randint(0, 1000)
 
         # Initialize the StandardScaler
-        scaler = StandardScaler()
+        #scaler = StandardScaler()
 
         self.logger.info(f"We use seed: {seed_to_use}")
         # list all rows with NaN values
@@ -135,14 +138,14 @@ class ScalerClassifier(object):
         columns_to_fit.extend([f'{tetra}' for tetra in self.tetra_list])
 
         # fit_transform the training data except for the genome column
-        self.training_data[columns_to_fit] = scaler.fit_transform(self.training_data[columns_to_fit])
+        #self.training_data[columns_to_fit] = scaler.fit_transform(self.training_data[columns_to_fit])
 
         # save the scaler to disk
-        try:
-            joblib.dump(scaler, os.path.join(self.output_dir, 'scaler_4_11.pkl'))
-        except Exception as e:
-            self.logger.error(f"Error saving scaler: {e}")
-            raise
+        # try:
+        #     joblib.dump(scaler, os.path.join(self.output_dir, 'scaler_4_11.pkl'))
+        # except Exception as e:
+        #     self.logger.error(f"Error saving scaler: {e}")
+        #     raise
 
         # # show the mean and standard deviation of the training data Coding_density_4,
         self.logger.info(f"Mean of Coding_density_4: {self.training_data['Coding_density_4'].mean()}")
@@ -162,14 +165,22 @@ class ScalerClassifier(object):
         MIN_SAMPLES_LEAF = 2
 
         # TODO : we may have to change the classifier/scaler based on results of the analysis and change the range of feature if we want
-        picked_classifier = RandomForestClassifier(verbose=1,n_jobs=self.thread_count,
-                                                   class_weight=CLASS_WEIGHT,n_estimators=NESTIMATORS,
-                                                    min_samples_leaf=MIN_SAMPLES_LEAF,random_state=seed_to_use)
+        # picked_classifier = RandomForestClassifier(verbose=1,n_jobs=self.thread_count,
+        #                                            class_weight=CLASS_WEIGHT,n_estimators=NESTIMATORS,
+        #                                             min_samples_leaf=MIN_SAMPLES_LEAF,random_state=seed_to_use)
 
-        self.logger.info(f'Training the classifier with {picked_classifier.n_estimators} trees, '
-                         f'class weight: {picked_classifier.class_weight}, '
-                         f'min samples leaf: {picked_classifier.min_samples_leaf}')
+        # self.logger.info(f'Training the classifier with {picked_classifier.n_estimators} trees, '
+        #                  f'class weight: {picked_classifier.class_weight}, '
+        #                  f'min samples leaf: {picked_classifier.min_samples_leaf}')
 
+
+        picked_classifier = AdaBoostClassifier(estimator=DecisionTreeClassifier(max_depth=2),
+                                                n_estimators=50, learning_rate=1,
+                                                random_state=seed_to_use)
+
+        self.logger.info(f"Training AdaBoost classifier with {picked_classifier.n_estimators} estimators, "
+                         f"learning rate: {picked_classifier.learning_rate}, "
+                         f"base estimator: DecisionTreeClassifier(max_depth=2)")
 
         if sfs:
             sss = StratifiedKFold(n_splits=5, random_state=seed_to_use, shuffle=True)
@@ -200,7 +211,7 @@ class ScalerClassifier(object):
         picked_classifier.fit(x_train, y_train)
 
         try:
-            joblib.dump(picked_classifier, os.path.join(self.output_dir, 'rf_4_11.pkl'))
+            joblib.dump(picked_classifier, os.path.join(self.output_dir, 'ada_4_11.pkl'))
         except Exception as e:
             self.logger.error(f"Error saving classifier: {e}")
             raise

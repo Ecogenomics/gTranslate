@@ -24,7 +24,7 @@ from time import sleep
 
 from tqdm import tqdm
 
-from gtranslate.biolib_lite.prodigal_biolib import Prodigal as BioLibProdigal
+from gtranslate.biolib_lite.prodigal_runner import Prodigal as RunnerProdigal
 from gtranslate.config.output import CHECKSUM_SUFFIX
 from gtranslate.exceptions import ProdigalException
 from gtranslate.files.prodigal.tln_table import TlnTableFile
@@ -70,7 +70,7 @@ class Prodigal(object):
         except:
             return "(version unavailable)"
 
-    def _run_prodigal(self, genome_id, fasta_path,cl11,scale11,cl25,scale25):
+    def _run_prodigal(self, genome_id, fasta_path):
         """Run Prodigal.
 
         Parameters
@@ -98,11 +98,8 @@ class Prodigal(object):
             return aa_gene_file, nt_gene_file, gff_file, tln_table_file, True , False
 
         # Run Prodigal
-        prodigal = BioLibProdigal(1, False,cl11=cl11,
-            scale11=scale11,
-            cl25=cl25,
-            scale25=scale25)
-        summary_stats = prodigal.run([fasta_path], output_dir,
+        runnerprodigal = RunnerProdigal(1, False)
+        summary_stats = runnerprodigal.run([fasta_path], output_dir,
                                      called_genes=False)
 
         # An error occurred in BioLib Prodigal.
@@ -136,8 +133,6 @@ class Prodigal(object):
             tln_table_file.n50 = summary_stats.n50
             tln_table_file.genome_size = summary_stats.genome_size
             tln_table_file.contig_count = summary_stats.contig_count
-            tln_table_file.probability_4_11 = summary_stats.probability_4_11
-            tln_table_file.probability_4_25 = summary_stats.probability_4_25
 
 
             tln_table_file.write()
@@ -158,9 +153,9 @@ class Prodigal(object):
             if data is None:
                 break
 
-            genome_id, file_path,cl11,scale11,cl25,scale25 = data
+            genome_id, file_path = data
 
-            rtn_files = self._run_prodigal(genome_id, file_path,cl11,scale11,cl25,scale25)
+            rtn_files = self._run_prodigal(genome_id, file_path)
             was_skipped = False
 
             # Only proceed if an error didn't occur in BioLib Prodigal
@@ -181,8 +176,6 @@ class Prodigal(object):
                                     "n50": translation_table_file.n50,
                                     "genome_size": translation_table_file.genome_size,
                                     "contig_count": translation_table_file.contig_count,
-                                    "probability_4_11": translation_table_file.probability_4_11,
-                                    "probability_4_25": translation_table_file.probability_4_25,
                                   "is_empty": is_empty}
 
                 out_dict[genome_id] = prodigal_infos
@@ -200,7 +193,7 @@ class Prodigal(object):
                 except ValueError:
                     pass  # Handle unexpected item structures gracefully
 
-    def run(self, genomic_files,cl11,scale11,cl25,scale25):
+    def run(self, genomic_files):
         """Run Prodigal across a set of genomes.
 
         Parameters
@@ -216,7 +209,7 @@ class Prodigal(object):
         writer_queue = mp.Queue()
 
         for genome_id, file_path in genomic_files.items():
-            worker_queue.put((genome_id, file_path,cl11,scale11,cl25,scale25))
+            worker_queue.put((genome_id, file_path))
 
         for _ in range(self.threads):
             worker_queue.put(None)

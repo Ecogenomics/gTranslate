@@ -28,10 +28,6 @@ class TlnTableFile(object):
         Size of the genome.
     contig_count : int, optional
         Count of contigs in the genome.
-    probability_4_11 : float, optional
-        Probability for translation table 4/11.
-    probability_4_25 : float, optional
-        Probability for translation table 4/25.
     """
 
     def __init__(self, out_dir: str, gid: str,
@@ -41,9 +37,7 @@ class TlnTableFile(object):
                  gc_percentage: Optional[float] = None,
                  n50_value: Optional[int] = None,
                  genome_length: Optional[int] = None,
-                 contig_count: Optional[int] = None,
-                 probability_4_11: Optional[float] = None,
-                 probability_4_25: Optional[float] = None):
+                 contig_count: Optional[int] = None):
         self.path = self.get_path(out_dir, gid)
         self._best_tln_table = best_tln_table
         self._coding_density_4 = coding_density_4
@@ -52,12 +46,23 @@ class TlnTableFile(object):
         self._n50 = n50_value
         self._genome_size = genome_length
         self._contig_count = contig_count
-        self._probability_4_11 = probability_4_11
-        self._probability_4_25 = probability_4_25
 
     def _validate_and_set(self, attribute, value, expected_type):
+        # 1. Handle missing/empty data gracefully
+        if value is None or str(value).strip().upper() in ['N/A', 'NONE', 'NAN', '']:
+            setattr(self, f'_{attribute}', None)
+            return
+
         try:
-            setattr(self, f'_{attribute}', expected_type(value))
+            # If expected_type is int, casting a string like '4.0' directly
+            # to int crashes. Casting to float first safely strips the decimal.
+            if expected_type is int:
+                clean_value = int(float(value))
+            else:
+                clean_value = expected_type(value)
+
+            setattr(self, f'_{attribute}', clean_value)
+
         except ValueError:
             raise GTranslateExit(f'Invalid {attribute} value: {value} for {self.path}')
 
@@ -117,21 +122,6 @@ class TlnTableFile(object):
     def contig_count(self, v):
         self._validate_and_set('contig_count', v, int)
 
-    @property
-    def probability_4_11(self):
-        return self._probability_4_11
-
-    @probability_4_11.setter
-    def probability_4_11(self, v):
-        self._validate_and_set('probability_4_11', v, float)
-
-    @property
-    def probability_4_25(self):
-        return self._probability_4_25
-
-    @probability_4_25.setter
-    def probability_4_25(self, v):
-        self._validate_and_set('probability_4_25', v, str)
 
     @staticmethod
     def get_path(out_dir: str, gid: str):
@@ -172,10 +162,6 @@ class TlnTableFile(object):
                         self.genome_size = val
                     elif idx == 'contig_count':
                         self.contig_count = val
-                    elif idx == 'probability_4_11':
-                        self.probability_4_11 = val
-                    elif idx == 'probability_4_25':
-                        self.probability_4_25 = val
         except FileNotFoundError:
             raise GTranslateExit(f'Translation table summary file not found: {self.path}')
         except ValueError as e:
@@ -192,8 +178,6 @@ class TlnTableFile(object):
                 fh.write(f'n50\t{self.n50}\n')
                 fh.write(f'genome_size\t{self.genome_size}\n')
                 fh.write(f'contig_count\t{self.contig_count}\n')
-                fh.write(f'probability_4_11\t{self.probability_4_11}\n')
-                fh.write(f'probability_4_25\t{self.probability_4_25}\n')
         except Exception as e:
             raise GTranslateExit(f'Error writing file: {self.path} - {e}')
 
