@@ -63,4 +63,14 @@ class TTPredictor:
 
 
         confidence_score = vote_preds.get(best_class, 0) / len(self.models)
+        bonus_confidence = 0.0
+
+        # Add 0.05 partial confidence for each vote going to the other recoding event
+        if best_class == '4':
+            bonus_confidence = vote_preds.get('25', 0) * 0.05
+        elif best_class == '25':
+            bonus_confidence = vote_preds.get('4', 0) * 0.05
+
+        confidence_score += bonus_confidence
+
         return best_class, confidence_score, warnings
