@@ -53,13 +53,13 @@ class ConsumerData:
     nt_gene_file: str
     gff_file: str
     is_empty: bool
+    pred_confidence: float
+    pred_warnings: list
     metadata: dict = field(default_factory=dict)
 
     def __post_init__(self):
         for key, value in self.metadata.items():
             setattr(self, key, value) # Dynamically add metadata keys as attributes
-        if 'probability_4_25' not in self.metadata:
-            self.probability_4_25 = 'N/A'
 
 
 
@@ -67,10 +67,7 @@ class ConsumerData:
 class Prodigal(object):
     """Wrapper for running Prodigal in parallel."""
 
-    def __init__(self, cpus, verbose=True,cl11=None,
-            scale11=None,
-            cl25=None,
-            scale25=None,):
+    def __init__(self, cpus, verbose=True):
         """Initialization.
 
         Parameters
@@ -87,10 +84,6 @@ class Prodigal(object):
 
         self.cpus = cpus
         self.verbose = verbose
-        self.cl11 = cl11
-        self.scale11 = scale11
-        self.cl25 = cl25
-        self.scale25 = scale25
 
     def _producer(self, genome_file):
         """Apply prodigal to genome with most suitable translation table.
@@ -125,9 +118,7 @@ class Prodigal(object):
             if len(seqs) == 0:
                 self.logger.warning('Cannot call Prodigal on an empty genome. '
                                     'Skipped: {}'.format(genome_file))
-                return (
-                genome_id, aa_gene_file, nt_gene_file, gff_file, best_translation_table, table_coding_density[4],
-                table_coding_density[11], True)
+                return (genome_id, aa_gene_file, nt_gene_file, gff_file, {}, 0.0, ["Skipped: Empty genome"], True)
 
             ksignature = GenomicSignatures(4, threads=1)
             with tempfile.TemporaryDirectory('gtranslate_prodigal_tmp_') as tmp_dir:
@@ -197,9 +188,7 @@ class Prodigal(object):
 
                 predictor = TTPredictor()
 
-                print(temp_df)
-
-                best_translation_table = predictor.predict_translation_table(temp_df)
+                best_translation_table,pred_confidence,pred_warnings = predictor.predict_translation_table(temp_df)
                 best_translation_table = int(best_translation_table)
 
                 if best_translation_table not in [4, 11]:
@@ -226,7 +215,7 @@ class Prodigal(object):
                                              genome_id + '.gff'), gff_file)
 
 
-        return (genome_id, aa_gene_file, nt_gene_file, gff_file,genome_metadata_dict,False)
+        return (genome_id, aa_gene_file, nt_gene_file, gff_file,genome_metadata_dict,pred_confidence,pred_warnings,False)
 
     def _consumer(self, produced_data, consumer_data):
         """Consume results from producer processes.
@@ -252,9 +241,18 @@ class Prodigal(object):
         if consumer_data is None:
             consumer_data = {}
 
-        genome_id, aa_gene_file, nt_gene_file, gff_file, metadata_dict, is_empty = produced_data
+        genome_id, aa_gene_file, nt_gene_file, gff_file, metadata_dict, pred_confidence, pred_warnings, is_empty = produced_data
 
-        consumer_data[genome_id] = ConsumerData(aa_gene_file, nt_gene_file, gff_file, is_empty,metadata_dict)
+        # FIX: Use keyword arguments to guarantee the data goes to the correct dataclass fields
+        consumer_data[genome_id] = ConsumerData(
+            aa_gene_file=aa_gene_file,
+            nt_gene_file=nt_gene_file,
+            gff_file=gff_file,
+            is_empty=is_empty,
+            pred_confidence=pred_confidence,
+            pred_warnings=pred_warnings,
+            metadata=metadata_dict
+        )
         return consumer_data
 
     def _progress(self, processed_items, total_items):

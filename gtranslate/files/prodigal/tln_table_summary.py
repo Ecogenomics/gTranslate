@@ -14,75 +14,55 @@
 #    along with this program. If not, see <http://www.gnu.org/licenses/>.     #
 #                                                                             #
 ###############################################################################
-
+import csv
 import os
+from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Tuple, Optional, Union
 
 from gtranslate.biolib_lite.common import make_sure_path_exists
 from gtranslate.config.output import PATH_TLN_TABLE_SUMMARY
 from gtranslate.exceptions import GTranslateExit
 
+
+@dataclass(slots=True)
 class TranslationSummaryFileRow:
     """A row contained within the ClassifySummaryFile object."""
+    gid: str
+    best_tln_table: Optional[int] = None
+    coding_density_4: Optional[float] = None
+    coding_density_11: Optional[float] = None
+    gc_percent: Optional[float] = None
+    n50: Optional[int] = None
+    genome_size: Optional[int] = None
+    contig_count: Optional[int] = None
+    confidence: Optional[float] = None
+    warnings: List[str] = field(default_factory=list)
 
-    # db_genome_id, info.get("best_translation_table"), info.get("coding_density_4"),
-    # info.get("coding_density_11"), info.get("gc_percent"), info.get("n50"),
-    # info.get("genome_size"), info.get("contig_count"), info.get("probability_4_11"),
-    # info.get("probability_4_25", "N/A"))
+    def __post_init__(self):
+        """Automatically enforce types upon creation."""
+        # Cleanly cast floats-as-strings (e.g., "4.0") to true integers
+        if self.best_tln_table is not None: self.best_tln_table = int(float(self.best_tln_table))
+        if self.n50 is not None: self.n50 = int(float(self.n50))
+        if self.genome_size is not None: self.genome_size = int(float(self.genome_size))
+        if self.contig_count is not None: self.contig_count = int(float(self.contig_count))
 
-    __slots__ = ('gid', 'best_tln_table', 'coding_density_4', 'coding_density_11',
-                 'gc_percent', 'n50', 'genome_size', 'contig_count', 'probability_4_11',
-                 'probability_4_25','warnings')
-
-    def __init__(self):
-        """Initialise the row, default all the values to None."""
-        self.gid: Optional[str] = None
-        self.best_tln_table: Optional[int] = None
-        self.coding_density_4: Optional[float] = None
-        self.coding_density_11: Optional[float] = None
-        self.gc_percent: Optional[float] = None
-        self.n50: Optional[int] = None
-        self.genome_size: Optional[int] = None
-        self.contig_count: Optional[int] = None
-        self.probability_4_11: Optional[float] = None
-        self.probability_4_25: Optional[str] = None
-        self.warnings: Optional[List[str]] = None
-
-
+        if self.coding_density_4 is not None: self.coding_density_4 = float(self.coding_density_4)
+        if self.coding_density_11 is not None: self.coding_density_11 = float(self.coding_density_11)
+        if self.gc_percent is not None: self.gc_percent = float(self.gc_percent)
+        if self.confidence is not None: self.confidence = float(self.confidence)
 
 
 class TranslationSummaryFile(object):
     """Records the translation table for one or more genomes."""
-    __slots__ = ('path', 'rows', 'none_value')
+    columns_names = [
+        'user_genome', 'best_tln_table', 'coding_density_4', 'coding_density_11',
+        'gc_percent', 'n50', 'genome_size', 'contig_count','confidence','warnings' ]
 
     def __init__(self, out_dir: str, prefix: str):
         """Configure paths and initialise storage dictionary."""
         self.path: str = os.path.join(out_dir, PATH_TLN_TABLE_SUMMARY.format(prefix=prefix))
         self.rows: Dict[str, TranslationSummaryFileRow] = dict()
         self.none_value = 'N/A'  # Value to use for None values in the file.
-
-    @staticmethod
-    def get_col_order(row: TranslationSummaryFileRow = None) -> Tuple[List[str], List[Union[str, float, int]]]:
-        """Return the column order that will be written. If a row is provided
-        then format the row in that specific order."""
-        if row is None:
-            row = TranslationSummaryFileRow()
-        mapping = [('user_genome', row.gid),
-                     ('best_tln_table', row.best_tln_table),
-                     ('coding_density_4', row.coding_density_4),
-                     ('coding_density_11', row.coding_density_11),
-                     ('gc_percent', row.gc_percent),
-                     ('n50', row.n50),
-                     ('genome_size', row.genome_size),
-                     ('contig_count', row.contig_count),
-                     ('probability_4_11', row.probability_4_11),
-                     ('probability_4_25', row.probability_4_25),
-                     ('warnings', row.warnings)]
-        cols, data = list(), list()
-        for col_name, col_val in mapping:
-            cols.append(col_name)
-            data.append(col_val)
-        return cols, data
 
 
     def add_row(self, row: TranslationSummaryFileRow):
@@ -106,60 +86,62 @@ class TranslationSummaryFile(object):
         return False
 
     def write(self):
-        """Writes the summary file to disk. None will be replaced with N/A"""
+        """Writes the summary file using csv.DictWriter."""
         make_sure_path_exists(os.path.dirname(self.path))
-        with open(self.path, 'w') as fh:
-            fh.write('\t'.join(self.get_col_order()[0]) + '\n')
-            header, values = self.get_col_order()
+
+        with open(self.path, 'w', newline='') as fh:
+            writer = csv.DictWriter(fh, fieldnames=self.columns_names, delimiter='\t')
+            writer.writeheader()
+
             for gid, row in sorted(self.rows.items()):
-                row_values = self.get_col_order(row)[1]
-                buf = []
+                # Convert dataclass to a dictionary
+                row_dict = asdict(row)
 
-                for col_name, value in zip(header, row_values):
-                    # Special case for 'warnings' column
-                    if col_name == 'warnings' and isinstance(value, list):
-                        value = ';'.join(value)
+                # Map 'gid' to 'user_genome' for the output file
+                row_dict['user_genome'] = row_dict.pop('gid')
 
-                    if value is not None:
-                        try:
-                            fval = float(value)
-                            if not fval.is_integer():
-                                value = round(fval, 5)
-                            else:
-                                value = fval
-                        except (ValueError, TypeError):
-                            pass  # Not a float-compatible value, leave as-is
-                    buf.append(self.none_value if value is None else str(value))
+                # Format warnings list to string
+                row_dict['warnings'] = ';'.join(row_dict['warnings']) if row_dict['warnings'] else self.none_value
 
-                fh.write('\t'.join(buf) + '\n')
+                # Replace None with 'N/A' and round floats
+                for key, val in row_dict.items():
+                    if val is None:
+                        row_dict[key] = self.none_value
+                    elif isinstance(val, float):
+                        row_dict[key] = round(val, 5)
 
-
+                writer.writerow(row_dict)
 
     def read(self):
-        """Read the summary file from disk."""
+        """Reads the summary file using csv.DictReader."""
         if not os.path.isfile(self.path):
             raise GTranslateExit(f'Error, classify summary file not found: {self.path}')
-        with open(self.path) as fh:
 
-            # Load and verify the columns match the expected order.
-            cols_exp, _ = self.get_col_order()
-            cols_cur = fh.readline().strip().split('\t')
-            if cols_exp != cols_cur:
-                raise GTranslateExit(f'The classify summary file columns are inconsistent: {cols_cur}')
+        with open(self.path, newline='') as fh:
+            reader = csv.DictReader(fh, delimiter='\t')
 
-            # Process the data.
-            for line in fh.readlines():
-                data = line.strip('\n').split('\t')
-                row = TranslationSummaryFileRow()
-                row.gid = data[0]
-                row.best_tln_table = int(data[1])
-                row.coding_density_4 = float(data[2])
-                row.coding_density_11 = float(data[3])
-                row.gc_percent = float(data[4])
-                row.n50 = int(data[5])
-                row.genome_size = int(data[6])
-                row.contig_count = int(data[7])
-                row.probability_4_11 = float(data[8])
-                row.probability_4_25 = data[9]
-                row.warnings = data[10].split(';') if data[10] else []
+            if reader.fieldnames != self.columns_names:
+                raise GTranslateExit(f'The classify summary file columns are inconsistent: {reader.fieldnames}')
+
+            for row_data in reader:
+                # Clean 'N/A' strings back to None
+                clean_data = {k: (None if v == self.none_value or v == '' else v) for k, v in row_data.items()}
+
+                # Parse warnings string back into a list
+                warnings_str = clean_data.get('warnings')
+                warnings_list = warnings_str.split(';') if warnings_str else []
+
+                # Create the dataclass (__post_init__ will handle the type casting automatically)
+                row = TranslationSummaryFileRow(
+                    gid=clean_data['user_genome'],
+                    best_tln_table=clean_data['best_tln_table'],
+                    coding_density_4=clean_data['coding_density_4'],
+                    coding_density_11=clean_data['coding_density_11'],
+                    gc_percent=clean_data['gc_percent'],
+                    n50=clean_data['n50'],
+                    genome_size=clean_data['genome_size'],
+                    contig_count=clean_data['contig_count'],
+                    confidence=clean_data['confidence'],
+                    warnings=warnings_list
+                )
                 self.add_row(row)

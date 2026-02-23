@@ -1,5 +1,5 @@
 import os
-from typing import Optional
+from typing import Optional, List
 
 from gtranslate.config.output import TRANSLATION_TABLE_SUFFIX
 from gtranslate.exceptions import GTranslateExit
@@ -7,27 +7,7 @@ from gtranslate.exceptions import GTranslateExit
 
 class TlnTableFile(object):
     """
-    A class to handle the translation table summary file for a genome. This class is used for reading, writing, and managing the translation table file
-    associated with a genome, which includes various properties like coding densities, GC content, N50 value, genome size, etc.
-
-    Attributes
-    ----------
-    path : str
-        Path to the translation table summary file.
-    best_tln_table : int, optional
-        Best translation table for the genome.
-    coding_density_4 : float, optional
-        Coding density for translation table 4.
-    coding_density_11 : float, optional
-        Coding density for translation table 11.
-    gc_percent : float, optional
-        GC content percentage of the genome.
-    n50 : int, optional
-        N50 value of the genome.
-    genome_size : int, optional
-        Size of the genome.
-    contig_count : int, optional
-        Count of contigs in the genome.
+    A class to handle the translation table summary file for a genome.
     """
 
     def __init__(self, out_dir: str, gid: str,
@@ -37,7 +17,10 @@ class TlnTableFile(object):
                  gc_percentage: Optional[float] = None,
                  n50_value: Optional[int] = None,
                  genome_length: Optional[int] = None,
-                 contig_count: Optional[int] = None):
+                 contig_count: Optional[int] = None,
+                 confidence: Optional[float] = None,
+                 warnings: Optional[List[str]] = None):
+
         self.path = self.get_path(out_dir, gid)
         self._best_tln_table = best_tln_table
         self._coding_density_4 = coding_density_4
@@ -46,6 +29,8 @@ class TlnTableFile(object):
         self._n50 = n50_value
         self._genome_size = genome_length
         self._contig_count = contig_count
+        self._confidence = confidence
+        self._warnings = warnings or []
 
     def _validate_and_set(self, attribute, value, expected_type):
         # 1. Handle missing/empty data gracefully
@@ -122,32 +107,45 @@ class TlnTableFile(object):
     def contig_count(self, v):
         self._validate_and_set('contig_count', v, int)
 
+    @property
+    def confidence(self):
+        return self._confidence
+
+    @confidence.setter
+    def confidence(self, v):
+        self._validate_and_set('confidence', v, float)
+
+    @property
+    def warnings(self):
+        return self._warnings
+
+    @warnings.setter
+    def warnings(self, v):
+        # Custom logic to handle strings (from reading the file) or lists
+        if v is None or str(v).strip().upper() in ['N/A', 'NONE', 'NAN', '']:
+            self._warnings = []
+        elif isinstance(v, str):
+            self._warnings = [w.strip() for w in v.split(';') if w.strip()]
+        elif isinstance(v, list):
+            self._warnings = v
+        else:
+            raise GTranslateExit(f'Invalid warnings value: {v} for {self.path}')
 
     @staticmethod
     def get_path(out_dir: str, gid: str):
-        """
-        Construct the path for the translation table summary file based on the genome ID and output directory.
-
-        Parameters
-        ----------
-        out_dir : str
-            Output directory where the file will be stored.
-        gid : str
-            Genome ID to be used in the file name.
-
-        Returns
-        -------
-        str
-            Path to the translation table summary file.
-        """
         return os.path.join(out_dir, f'{gid}{TRANSLATION_TABLE_SUFFIX}')
-
 
     def read(self):
         try:
             with open(self.path, 'r') as fh:
                 for line in fh.readlines():
-                    idx, val = line.strip().split('\t')
+                    # Handle empty values cleanly by using .split('\t', 1)
+                    parts = line.strip('\n').split('\t', 1)
+                    if len(parts) != 2:
+                        continue
+
+                    idx, val = parts
+
                     if idx == 'best_translation_table':
                         self.best_tln_table = val
                     elif idx == 'coding_density_4':
@@ -162,11 +160,14 @@ class TlnTableFile(object):
                         self.genome_size = val
                     elif idx == 'contig_count':
                         self.contig_count = val
+                    elif idx == 'confidence':
+                        self.confidence = val
+                    elif idx == 'warnings':
+                        self.warnings = val
         except FileNotFoundError:
             raise GTranslateExit(f'Translation table summary file not found: {self.path}')
-        except ValueError as e:
+        except Exception as e:
             raise GTranslateExit(f'Error parsing file: {self.path} - {e}')
-
 
     def write(self):
         try:
@@ -178,6 +179,11 @@ class TlnTableFile(object):
                 fh.write(f'n50\t{self.n50}\n')
                 fh.write(f'genome_size\t{self.genome_size}\n')
                 fh.write(f'contig_count\t{self.contig_count}\n')
+                fh.write(f'confidence\t{self.confidence}\n')
+
+                # Format warnings list to a semicolon-separated string, or 'N/A' if empty
+                warnings_str = ';'.join(self.warnings) if self.warnings else 'N/A'
+                fh.write(f'warnings\t{warnings_str}\n')
+
         except Exception as e:
             raise GTranslateExit(f'Error writing file: {self.path} - {e}')
-

@@ -58,14 +58,6 @@ class TablePredictor(object):
                 Prefix to append to generated files.
             force : bool
                 Overwrite any existing files.
-            cl11 : optional
-                Custom classifier 4/11.
-            scale11 : optional
-                Custom scaler 4/11.
-            cl25 : optional
-                Custom classifier 4/25.
-            scale25 : optional
-                Custom scaler 4/25.
 
             Returns
             -------
@@ -117,8 +109,8 @@ class TablePredictor(object):
 
         for db_genome_id, info in tqdm_log(sorted(gene_dict.items()), unit='genome'):
             # Write the best translation table to disk for this genome.
-            summary_row = TranslationSummaryFileRow()
-            summary_row.gid = db_genome_id
+            print(info)
+            summary_row = TranslationSummaryFileRow(gid=db_genome_id)
             summary_row.best_tln_table = info.get("best_translation_table")
             summary_row.coding_density_4 = info.get("coding_density_4")
             summary_row.coding_density_11 = info.get("coding_density_11")
@@ -126,8 +118,9 @@ class TablePredictor(object):
             summary_row.n50 = info.get("n50")
             summary_row.genome_size = info.get("genome_size")
             summary_row.contig_count = info.get("contig_count")
+            summary_row.confidence=info.get("confidence")
             # we add the warnings if there are any
-            warnings_list = []
+            warnings_list = info.get("warnings", [])
             if len(warnings_list) > 0:
                 summary_row.warnings = warnings_list
             tln_summary_file.add_row(summary_row)
