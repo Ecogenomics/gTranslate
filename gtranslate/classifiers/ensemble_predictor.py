@@ -2,10 +2,8 @@ from collections import Counter
 
 import joblib
 import numpy as np
-from scipy import stats
 
 from gtranslate.config.common import CONFIG
-
 
 class TTPredictor:
     def __init__(self):
@@ -37,6 +35,7 @@ class TTPredictor:
 
         all_predictions = np.column_stack([model.predict(df_aligned) for model in self.models])
         decoded_preds = self.label_encoder.inverse_transform(all_predictions[0])
+        decoded_preds_str = [str(p) for p in decoded_preds]
 
         vote_preds = Counter(decoded_preds)
         top_preds = vote_preds.most_common()
@@ -73,4 +72,23 @@ class TTPredictor:
 
         confidence_score += bonus_confidence
 
-        return best_class, confidence_score, warnings
+        ensemble_preds = {}
+
+
+        for model, pred in zip(self.models, decoded_preds_str):
+            # Extract the model's name
+            if hasattr(model, 'steps'):
+                model_name = list(model.named_steps.values())[-1].__class__.__name__
+            else:
+                model_name = type(model).__name__
+
+
+            # Save the prediction to the dictionary, casting back to an integer for cleanliness
+            # remove the 'Classifier' prefix from the model name for readability
+            ensemble_preds[model_name] = int(pred)
+
+        formatted_preds = {key.replace('Classifier', '').lower() + '_pred': value for key, value in
+                       ensemble_preds.items()}
+
+
+        return best_class, confidence_score, warnings, formatted_preds

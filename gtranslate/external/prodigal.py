@@ -135,6 +135,7 @@ class Prodigal(object):
             tln_table_file.contig_count = summary_stats.contig_count
             tln_table_file.warnings = summary_stats.pred_warnings
             tln_table_file.confidence = summary_stats.pred_confidence
+            tln_table_file.ensemble_preds = summary_stats.ensemble_preds
 
 
 
@@ -181,6 +182,7 @@ class Prodigal(object):
                                     "contig_count": translation_table_file.contig_count,
                                   "confidence": translation_table_file.confidence,
                                   "warnings": translation_table_file.warnings,
+                                  "ensemble_preds": translation_table_file.ensemble_preds,
                                   "is_empty": is_empty}
 
                 out_dict[genome_id] = prodigal_infos

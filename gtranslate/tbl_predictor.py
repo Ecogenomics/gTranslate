@@ -109,7 +109,6 @@ class TablePredictor(object):
 
         for db_genome_id, info in tqdm_log(sorted(gene_dict.items()), unit='genome'):
             # Write the best translation table to disk for this genome.
-            print(info)
             summary_row = TranslationSummaryFileRow(gid=db_genome_id)
             summary_row.best_tln_table = info.get("best_translation_table")
             summary_row.coding_density_4 = info.get("coding_density_4")
@@ -123,6 +122,11 @@ class TablePredictor(object):
             warnings_list = info.get("warnings", [])
             if len(warnings_list) > 0:
                 summary_row.warnings = warnings_list
+
+            ensemble_preds_dict = info.get("ensemble_preds", {})
+            if ensemble_preds_dict:
+                summary_row.ensemble_preds = ensemble_preds_dict
+
             tln_summary_file.add_row(summary_row)
 
         tln_summary_file.write()

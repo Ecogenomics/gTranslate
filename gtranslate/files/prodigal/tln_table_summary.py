@@ -15,6 +15,7 @@
 #                                                                             #
 ###############################################################################
 import csv
+import json
 import os
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Tuple, Optional, Union
@@ -37,6 +38,7 @@ class TranslationSummaryFileRow:
     contig_count: Optional[int] = None
     confidence: Optional[float] = None
     warnings: List[str] = field(default_factory=list)
+    ensemble_preds: dict = field(default_factory=dict)
 
     def __post_init__(self):
         """Automatically enforce types upon creation."""
@@ -54,9 +56,9 @@ class TranslationSummaryFileRow:
 
 class TranslationSummaryFile(object):
     """Records the translation table for one or more genomes."""
-    columns_names = [
+    fixed_columns_names = [
         'user_genome', 'best_tln_table', 'coding_density_4', 'coding_density_11',
-        'gc_percent', 'n50', 'genome_size', 'contig_count','confidence','warnings' ]
+        'gc_percent', 'n50', 'genome_size', 'contig_count','confidence','warnings']
 
     def __init__(self, out_dir: str, prefix: str):
         """Configure paths and initialise storage dictionary."""
@@ -89,8 +91,18 @@ class TranslationSummaryFile(object):
         """Writes the summary file using csv.DictWriter."""
         make_sure_path_exists(os.path.dirname(self.path))
 
+        model_columns = []
+        for row in self.rows.values():
+            for model_name in row.ensemble_preds.keys():
+                if model_name not in model_columns:
+                    model_columns.append(model_name)
+
+        # put the warnings column at the end
+        columns_names = self.fixed_columns_names[:-1] + model_columns + [self.fixed_columns_names[-1]]
+
+
         with open(self.path, 'w', newline='') as fh:
-            writer = csv.DictWriter(fh, fieldnames=self.columns_names, delimiter='\t')
+            writer = csv.DictWriter(fh, fieldnames=columns_names, delimiter='\t')
             writer.writeheader()
 
             for gid, row in sorted(self.rows.items()):
@@ -102,6 +114,9 @@ class TranslationSummaryFile(object):
 
                 # Format warnings list to string
                 row_dict['warnings'] = ';'.join(row_dict['warnings']) if row_dict['warnings'] else self.none_value
+                preds = row_dict.pop('ensemble_preds')
+                for model in model_columns:
+                    row_dict[model] = preds.get(model, self.none_value)
 
                 # Replace None with 'N/A' and round floats
                 for key, val in row_dict.items():
@@ -113,25 +128,35 @@ class TranslationSummaryFile(object):
                 writer.writerow(row_dict)
 
     def read(self):
-        """Reads the summary file using csv.DictReader."""
+        """Reads the summary file and dynamically repacks model columns into a dictionary."""
         if not os.path.isfile(self.path):
             raise GTranslateExit(f'Error, classify summary file not found: {self.path}')
 
         with open(self.path, newline='') as fh:
             reader = csv.DictReader(fh, delimiter='\t')
 
-            if reader.fieldnames != self.columns_names:
-                raise GTranslateExit(f'The classify summary file columns are inconsistent: {reader.fieldnames}')
+            # Validate that the core standard columns exist
+            for col in self.fixed_columns_names:
+                if col not in reader.fieldnames:
+                    raise GTranslateExit(f'Missing standard column in file: {col}')
+
+            # 1. Identify which columns are dynamic model columns (anything not standard)
+            model_columns = [col for col in reader.fieldnames if col not in self.fixed_columns_names]
 
             for row_data in reader:
-                # Clean 'N/A' strings back to None
                 clean_data = {k: (None if v == self.none_value or v == '' else v) for k, v in row_data.items()}
 
-                # Parse warnings string back into a list
                 warnings_str = clean_data.get('warnings')
                 warnings_list = warnings_str.split(';') if warnings_str else []
 
-                # Create the dataclass (__post_init__ will handle the type casting automatically)
+                # 2. Rebuild the ensemble_preds dictionary from the trailing columns
+                preds_dict = {}
+                for model in model_columns:
+                    val = clean_data.get(model)
+                    if val is not None:
+                        # Safely cast '4.0' or '4' strings back to clean integers
+                        preds_dict[model] = int(float(val))
+
                 row = TranslationSummaryFileRow(
                     gid=clean_data['user_genome'],
                     best_tln_table=clean_data['best_tln_table'],
@@ -142,6 +167,7 @@ class TranslationSummaryFile(object):
                     genome_size=clean_data['genome_size'],
                     contig_count=clean_data['contig_count'],
                     confidence=clean_data['confidence'],
-                    warnings=warnings_list
+                    warnings=warnings_list,
+                    ensemble_preds=preds_dict
                 )
                 self.add_row(row)

@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Optional, List
 
@@ -19,6 +20,7 @@ class TlnTableFile(object):
                  genome_length: Optional[int] = None,
                  contig_count: Optional[int] = None,
                  confidence: Optional[float] = None,
+                 ensemble_preds: Optional[dict] = None,
                  warnings: Optional[List[str]] = None):
 
         self.path = self.get_path(out_dir, gid)
@@ -30,6 +32,7 @@ class TlnTableFile(object):
         self._genome_size = genome_length
         self._contig_count = contig_count
         self._confidence = confidence
+        self._ensemble_preds = ensemble_preds or {}
         self._warnings = warnings or []
 
     def _validate_and_set(self, attribute, value, expected_type):
@@ -116,6 +119,19 @@ class TlnTableFile(object):
         self._validate_and_set('confidence', v, float)
 
     @property
+    def ensemble_preds(self):
+        return self._ensemble_preds 
+
+    @ensemble_preds.setter
+    def ensemble_preds(self, v):
+        if v is None or str(v).strip().upper() in ['N/A', 'NONE', 'NAN', '']:
+            self._ensemble_preds = {}
+        elif isinstance(v, dict):
+            self._ensemble_preds = v
+        else:
+            raise GTranslateExit(f'Invalid ensemble_preds value: {v} for {self.path}')
+
+    @property
     def warnings(self):
         return self._warnings
 
@@ -164,6 +180,12 @@ class TlnTableFile(object):
                         self.confidence = val
                     elif idx == 'warnings':
                         self.warnings = val
+                    elif idx == 'ensemble_preds':
+                        if val.strip().upper() in ['N/A', 'NONE', 'NAN', '']:
+                            self.ensemble_preds = {}
+                        else:
+                            self.ensemble_preds = json.loads(val)
+
         except FileNotFoundError:
             raise GTranslateExit(f'Translation table summary file not found: {self.path}')
         except Exception as e:
@@ -184,6 +206,9 @@ class TlnTableFile(object):
                 # Format warnings list to a semicolon-separated string, or 'N/A' if empty
                 warnings_str = ';'.join(self.warnings) if self.warnings else 'N/A'
                 fh.write(f'warnings\t{warnings_str}\n')
+
+                ensemble_preds_str = json.dumps(self.ensemble_preds) if self.ensemble_preds else 'N/A'
+                fh.write(f'ensemble_preds\t{ensemble_preds_str}\n')
 
         except Exception as e:
             raise GTranslateExit(f'Error writing file: {self.path} - {e}')

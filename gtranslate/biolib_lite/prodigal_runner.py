@@ -55,6 +55,7 @@ class ConsumerData:
     is_empty: bool
     pred_confidence: float
     pred_warnings: list
+    ensemble_preds: dict
     metadata: dict = field(default_factory=dict)
 
     def __post_init__(self):
@@ -188,7 +189,7 @@ class Prodigal(object):
 
                 predictor = TTPredictor()
 
-                best_translation_table,pred_confidence,pred_warnings = predictor.predict_translation_table(temp_df)
+                best_translation_table,pred_confidence,pred_warnings,ensemble_preds = predictor.predict_translation_table(temp_df)
                 best_translation_table = int(best_translation_table)
 
                 if best_translation_table not in [4, 11]:
@@ -214,8 +215,8 @@ class Prodigal(object):
                 shutil.copyfile(os.path.join(tmp_dir, str(best_translation_table),
                                              genome_id + '.gff'), gff_file)
 
-
-        return (genome_id, aa_gene_file, nt_gene_file, gff_file,genome_metadata_dict,pred_confidence,pred_warnings,False)
+        return (genome_id, aa_gene_file, nt_gene_file, gff_file,genome_metadata_dict,
+                pred_confidence,pred_warnings,ensemble_preds,False)
 
     def _consumer(self, produced_data, consumer_data):
         """Consume results from producer processes.
@@ -241,7 +242,7 @@ class Prodigal(object):
         if consumer_data is None:
             consumer_data = {}
 
-        genome_id, aa_gene_file, nt_gene_file, gff_file, metadata_dict, pred_confidence, pred_warnings, is_empty = produced_data
+        genome_id, aa_gene_file, nt_gene_file, gff_file, metadata_dict, pred_confidence, pred_warnings,ensemble_preds, is_empty = produced_data
 
         # FIX: Use keyword arguments to guarantee the data goes to the correct dataclass fields
         consumer_data[genome_id] = ConsumerData(
@@ -251,6 +252,7 @@ class Prodigal(object):
             is_empty=is_empty,
             pred_confidence=pred_confidence,
             pred_warnings=pred_warnings,
+            ensemble_preds=ensemble_preds,
             metadata=metadata_dict
         )
         return consumer_data
