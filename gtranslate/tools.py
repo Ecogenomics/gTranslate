@@ -77,7 +77,7 @@ def sha256(input_file):
         SHA256 hash.
     """
     block_size = 65536
-    hasher = hashlib.sha1()
+    hasher = hashlib.sha256()
     with open(input_file, 'rb') as afile:
         buf = afile.read(block_size)
         while len(buf) > 0:

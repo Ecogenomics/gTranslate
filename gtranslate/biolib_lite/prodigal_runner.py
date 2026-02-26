@@ -35,6 +35,7 @@ from dataclasses import dataclass, field
 import joblib
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 from . import seq_tk
 from .common import remove_extension, make_sure_path_exists, check_file_exists
@@ -43,9 +44,6 @@ from .parallel import Parallel
 from .seq_io import read_fasta, write_fasta
 from .seq_tk import gc, N50
 from ..classifiers.ensemble_predictor import TTPredictor
-from ..classifiers.table_classifiers import Classifier_4_11, Classifier_25
-from gtranslate.config.common import CONFIG
-from ..external.jellyfish import Jellyfish
 
 @dataclass
 class ConsumerData:
@@ -86,7 +84,7 @@ class Prodigal(object):
         self.cpus = cpus
         self.verbose = verbose
 
-    def _producer(self, genome_file):
+    def _producer(self, genome_file_tuple):
         """Apply prodigal to genome with most suitable translation table.
 
         Parameters
@@ -95,7 +93,7 @@ class Prodigal(object):
             Fasta file for genome.
         """
 
-        genome_id = remove_extension(genome_file)
+        genome_id,genome_file = genome_file_tuple
 
         aa_gene_file = os.path.join(self.output_dir, genome_id + '_genes.faa')
         nt_gene_file = os.path.join(self.output_dir, genome_id + '_genes.fna')
@@ -132,12 +130,19 @@ class Prodigal(object):
                 # call genes under different translation tables
                 translation_tables = [4, 11]
 
+                local_warnings = []
                 for translation_table in translation_tables:
                     os.makedirs(os.path.join(tmp_dir, str(translation_table)))
-                    aa_gene_file_tmp, nt_gene_file_tmp, gff_file_tmp,processed_prodigal_input = self.run_prodigal_command(translation_table,
+                    aa_gene_file_tmp, nt_gene_file_tmp, gff_file_tmp,processed_prodigal_input,fallback_warning = self.run_prodigal_command(translation_table,
                                                                                                  tmp_dir, genome_id,
                                                                                                  genome_file, seqs,
                                                                                                  total_bases)
+
+                    if fallback_warning:
+                        local_warnings.append(fallback_warning)
+
+
+
                     # determine coding density
                     prodigalParser = ProdigalGeneFeatureParser(gff_file_tmp)
 
@@ -192,12 +197,14 @@ class Prodigal(object):
                 best_translation_table,pred_confidence,pred_warnings,ensemble_preds = predictor.predict_translation_table(temp_df)
                 best_translation_table = int(best_translation_table)
 
+                pred_warnings.extend(local_warnings)
+
                 if best_translation_table not in [4, 11]:
                     # Create the missing temporary folder for this specific table (e.g., /25/)
                     os.makedirs(os.path.join(tmp_dir, str(best_translation_table)), exist_ok=True)
 
                     # Actually run Prodigal to generate the .faa, .fna, and .gff files
-                    self.run_prodigal_command(
+                    _, _, _, _, fallback_warning = self.run_prodigal_command(
                         best_translation_table,
                         tmp_dir,
                         genome_id,
@@ -205,6 +212,9 @@ class Prodigal(object):
                         seqs,
                         total_bases
                     )
+
+                    if fallback_warning:
+                        pred_warnings.extend(local_warnings)
 
                 genome_metadata_dict['best_tln_table'] = best_translation_table
 
@@ -243,6 +253,14 @@ class Prodigal(object):
             consumer_data = {}
 
         genome_id, aa_gene_file, nt_gene_file, gff_file, metadata_dict, pred_confidence, pred_warnings,ensemble_preds, is_empty = produced_data
+
+
+        for warning in pred_warnings:
+            # Check for our specific string so we only log the Prodigal fallbacks
+            # (or remove the if-statement to log ALL predictor warnings too)
+            if "Used 'meta' mode fallback" in warning:
+                self.logger.warning(f"{warning} for genome {genome_id}.")
+
 
         # FIX: Use keyword arguments to guarantee the data goes to the correct dataclass fields
         consumer_data[genome_id] = ConsumerData(
@@ -329,7 +347,7 @@ class Prodigal(object):
             if meta:
                 file_type = 'scaffolds'
                 if len(genome_files):
-                    file_type = ntpath.basename(genome_files[0])
+                    file_type = ntpath.basename(genome_files[0][1])
 
                 self.progress_str = '  Finished processing %d of %d (%.2f%%) files.'
 
@@ -393,7 +411,16 @@ class Prodigal(object):
                                 stderr=subprocess.PIPE, encoding='utf-8')
 
         stdout, stderr = proc.communicate()
-        # This extra step has been added for the issue 451 where Prodigal can return a free pointer error
+        fallback_warning = None
+        if proc.returncode != 0 and proc_str == 'single':
+            fallback_warning = f"Used 'meta' mode fallback for TT{translation_table}"
+            #self.logger.warning(f"Prodigal 'single' mode failed for {genome_id}. Retrying with 'meta' mode...")
+            cmd[cmd.index('single')] = 'meta'
+
+            # Re-run with the modified command
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf-8')
+            stdout, stderr = proc.communicate()
+
         if proc.returncode != 0:
             self.logger.warning('Error running Prodigal on genome: '
                                 '{}'.format(genome_file))
@@ -401,7 +428,7 @@ class Prodigal(object):
             for line in stderr.splitlines():
                 print(line)
             self.logger.warning('This genome is skipped.')
-        return aa_gene_file_tmp, nt_gene_file_tmp, gff_file_tmp ,processed_prodigal_input
+        return aa_gene_file_tmp, nt_gene_file_tmp, gff_file_tmp ,processed_prodigal_input,fallback_warning
 
     def _count_codons_of_interest(self, gene_file):
         """
@@ -687,17 +714,3 @@ class GenomicSignatures(object):
 
         return (float(G + C)*100) / (A + C + G + T)
 
-    def calculate_kmer_full_genome(self, processed_prodigal_input):
-        jellyfish = Jellyfish()
-        dict_kmers = jellyfish.run(processed_prodigal_input)
-
-        # we convert the kmers to frequencies by dividing by the total number of kmers
-        total_kmers = sum(dict_kmers.values())
-        for kmer in dict_kmers:
-            dict_kmers[kmer] = (100*dict_kmers[kmer]) / total_kmers
-
-        # we make sure that all kmers from Jellyfish are in dict_kmers and we add the missing ones
-        for kmer in CONFIG.JELLYFISH_4MERS:
-            if kmer not in dict_kmers:
-                dict_kmers[kmer] = 0
-        return dict_kmers

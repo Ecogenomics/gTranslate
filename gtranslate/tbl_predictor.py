@@ -20,7 +20,6 @@ import os
 from gtranslate.config.common import CONFIG
 from gtranslate.biolib_lite.execute import check_dependencies
 from gtranslate.config.output import *
-from gtranslate.external.jellyfish import Jellyfish
 from gtranslate.external.prodigal import Prodigal
 from gtranslate.files.prodigal.tln_table_summary import TranslationSummaryFile, TranslationSummaryFileRow
 from gtranslate.tools import tqdm_log,symlink_f

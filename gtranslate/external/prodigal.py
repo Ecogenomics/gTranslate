@@ -99,7 +99,7 @@ class Prodigal(object):
 
         # Run Prodigal
         runnerprodigal = RunnerProdigal(1, False)
-        summary_stats = runnerprodigal.run([fasta_path], output_dir,
+        summary_stats = runnerprodigal.run([(genome_id,fasta_path)], output_dir,
                                      called_genes=False)
 
         # An error occurred in BioLib Prodigal.

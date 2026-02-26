@@ -79,7 +79,7 @@ class Misc(object):
 
         # Check that all programs are on the system path.
         self.logger.info(f'Checking that all third-party software are on the system path:')
-        names = {'prodigal', 'jellyfish'}
+        names = {'prodigal'}
         for name in sorted(names):
             on_path = False
             try:
