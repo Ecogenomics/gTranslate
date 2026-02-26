@@ -1,0 +1,47 @@
+name: Python Unit Tests
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    # CRITICAL: Conda requires this specific shell configuration to activate environments properly
+    defaults:
+      run:
+        shell: bash -el {0}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    # 1. Set up Conda with the Bioconda channel
+    - name: Set up Bioconda
+      uses: conda-incubator/setup-miniconda@v2
+      with:
+        python-version: "3.12"
+        channels: conda-forge,bioconda,defaults
+        channel-priority: strict
+        activate-environment: test-env
+        auto-activate-base: false
+
+    # 2. Install Prodigal and Jellyfish via Conda
+    - name: Install external dependencies
+      run: |
+        conda install -y prodigal jellyfish
+
+    # 3. Install your package and testing tools via pip
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install . 
+        pip install pytest pytest-mock 
+
+    # 4. Run the tests
+    - name: Run unit tests
+      run: |
+        python -m unittest discover -s tests
