@@ -181,16 +181,14 @@ class Prodigal(object):
                 #we add glycine information
                 raw_ratio= np.log((table_trp_counts[4]['UGA'] + 1) / ((table_trp_counts[4]['UGG'] + 1)))
                 #lets clip the trp ratio to be between -6 and 5 as in the training data
-                temp_df['feature_trp_ratio'] = [max(-6.0, min(5.0, raw_ratio))]
+                temp_df['Trp_ratio'] = [max(-6.0, min(5.0, raw_ratio))]
 
-                temp_df['feature_trp_magnitude'] = [np.log(table_trp_counts[4]['UGA'] + table_trp_counts[4]['UGG'] + 1)]
+                temp_df['Trp_magnitude'] = [np.log(table_trp_counts[4]['UGA'] + table_trp_counts[4]['UGG'] + 1)]
 
-                #df['feature_gly_ratio'] = np.log((df['tt4_uga_count'] + 1) / (df['tt4_std_gly_count'] + 1)).clip(-10.0, 0.0)
                 raw_gly_ratio = np.log((table_trp_counts[4]['UGA'] + 1) / (table_trp_counts[4]['GLY'] + 1))
-                temp_df['feature_gly_ratio'] = [max(-10.0, min(0.0, raw_gly_ratio))]
+                temp_df['Gly_ratio'] = [max(-10.0, min(0.0, raw_gly_ratio))]
 
-                #df['feature_ugg_density'] = df['tt4_ugg_count'] / df['tt4_std_gly_count']
-                temp_df['feature_ugg_density'] = table_trp_counts[4]['UGG'] / (table_trp_counts[4]['GLY'])
+                temp_df['UGG_density'] = table_trp_counts[4]['UGG'] / (table_trp_counts[4]['GLY'])
 
                 predictor = TTPredictor()
 
@@ -258,7 +256,7 @@ class Prodigal(object):
         for warning in pred_warnings:
             # Check for our specific string so we only log the Prodigal fallbacks
             # (or remove the if-statement to log ALL predictor warnings too)
-            if "Used 'meta' mode fallback" in warning:
+            if "Used Prodigal 'meta' mode fallback" in warning:
                 self.logger.warning(f"{warning} for genome {genome_id}.")
 
 
@@ -413,7 +411,7 @@ class Prodigal(object):
         stdout, stderr = proc.communicate()
         fallback_warning = None
         if proc.returncode != 0 and proc_str == 'single':
-            fallback_warning = f"Used 'meta' mode fallback for TT{translation_table}"
+            fallback_warning = f"Used Prodigal 'meta' mode fallback for TT{translation_table}"
             #self.logger.warning(f"Prodigal 'single' mode failed for {genome_id}. Retrying with 'meta' mode...")
             cmd[cmd.index('single')] = 'meta'
 

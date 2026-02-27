@@ -116,18 +116,18 @@ class ScalerClassifierMulti(object):
         df['Coding_density_11'] = df['Coding_density_11']
         df['Density_Diff'] = df['Coding_density_4'] - df['Coding_density_11']
 
-        df['feature_trp_ratio'] = np.log((df['tt4_uga_count'] + 1) / (df['tt4_ugg_count'] + 1)).clip(-6.0, 5.0)
-        df['feature_trp_magnitude'] = np.log(df['tt4_uga_count'] + df['tt4_ugg_count'] + 1)
-        df['feature_gly_ratio'] = np.log((df['tt4_uga_count'] + 1) / (df['tt4_std_gly_count'] + 1)).clip(-10.0, 0.0)
+        df['Trp_ratio'] = np.log((df['tt4_uga_count'] + 1) / (df['tt4_ugg_count'] + 1)).clip(-6.0, 5.0)
+        df['Trp_magnitude'] = np.log(df['tt4_uga_count'] + df['tt4_ugg_count'] + 1)
+        df['Gly_ratio'] = np.log((df['tt4_uga_count'] + 1) / (df['tt4_std_gly_count'] + 1)).clip(-10.0, 0.0)
 
         #df['feature_uga_density'] = df['tt4_uga_count'] / (df['Coding_density_4'] + 0.001)
-        df['feature_ugg_density'] = df['tt4_ugg_count'] / df['tt4_std_gly_count']
+        df['UGG_density'] = df['tt4_ugg_count'] / df['tt4_std_gly_count']
         #df['feature_uga_vs_gly_pool'] = df['tt4_uga_count'] / (df['tt4_std_gly_count'] + df['tt4_uga_count'] + 1)
 
         self.feature_cols = [
             'Coding_density_4', 'Coding_density_11', 'Density_Diff', 'GC',
-            'feature_trp_ratio', 'feature_trp_magnitude', 'feature_gly_ratio',
-            'feature_ugg_density'
+            'Trp_ratio', 'Trp_magnitude', 'Gly_ratio',
+            'UGG_density'
         ]
 
         # Handle NaNs from mathematical operations
