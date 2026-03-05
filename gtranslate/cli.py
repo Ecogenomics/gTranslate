@@ -23,6 +23,15 @@ def mutex_group(parser, required):
 def arg_group(parser, name):
     yield parser.add_argument_group(name)
 
+def __feature_file(group,required):
+    group.add_argument('--feature_file', help="path to TSV file containing features for each genome",
+                          required=required)
+
+def __ouput_file(group, required):
+    group.add_argument('--output_file', help="path to output file",
+                       required=required)
+
+
 def __genome_dir(group):
     group.add_argument(
         '--genome_dir', help="directory containing genome files in FASTA format")
@@ -64,18 +73,6 @@ def __temp_dir(group):
                        help="specify alternative directory for temporary files")
 
 
-def __cl11(group):
-    group.add_argument('--cl11', help='Pickle file for Classifier 4/11')
-
-def __scale11(group):
-    group.add_argument('--scale11', help='Pickle file for Scaler 4/11')
-
-def __cl25(group):
-    group.add_argument('--cl25', help='Pickle file for Classifier 4/25')
-
-def __scale25(group):
-    group.add_argument('--scale25', help='Pickle file for Scaler 4/25')
-
 
 def get_main_parser():
     # Setup the main, and sub parsers.
@@ -98,10 +95,14 @@ def get_main_parser():
             __keep_called_genes(grp)
             __prefix(grp)
             __force(grp)
-            __cl11(grp)
-            __scale11(grp)
-            __cl25(grp)
-            __scale25(grp)
+
+    with subparser(sub_parsers, 'generate_plot', 'Generate an interactive HTML dashboard to explore the features used for GTT prediction.') as parser:
+        with arg_group(parser, 'required named arguments') as grp:
+            __feature_file(grp, required=True)
+            __ouput_file(grp, required=True)
+        with arg_group(parser, 'optional arguments') as grp:
+             __help(grp)
+
 
     with subparser(sub_parsers, 'test', 'Validate detection of the genetic translation table (GTT) '
                                        'used in prokaryotic organisms.') as parser:

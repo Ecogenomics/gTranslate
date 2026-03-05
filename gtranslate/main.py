@@ -33,6 +33,7 @@ from gtranslate.exceptions import GTranslateExit
 from gtranslate.files.batchfile import Batchfile
 from gtranslate.files.prodigal.tln_table_summary import TranslationSummaryFile
 from gtranslate.misc import Misc
+from gtranslate.plots.plotter import FeaturePlotter
 from gtranslate.tbl_predictor import TablePredictor
 from gtranslate.tools import remove_intermediate_files
 
@@ -190,6 +191,22 @@ class OptionsParser(object):
 
         self.logger.info('Done.')
 
+    def generate_plot(self, options):
+        """Generate an interactive HTML dashboard to explore the features used for GTT prediction.
+
+        Parameters
+        ----------
+        options : argparse.Namespace
+            The CLI arguments input by the user.
+        """
+        self.logger.info('Running generate_plot')
+
+        plotter = FeaturePlotter(options.feature_file, options.output_file)
+        plotter.generate_html()
+
+
+        self.logger.info('Done.')
+
     def run_test(self, options):
         """Run the test suite. To make sure the program is working as expected.
         """
@@ -313,6 +330,8 @@ class OptionsParser(object):
 
         if options.subparser_name == 'detect_table':
             self.detect_table(options)
+        elif options.subparser_name == 'generate_plot':
+            self.generate_plot(options)
         elif options.subparser_name == 'test':
             self.run_test(options)
         elif options.subparser_name == 'check_install':

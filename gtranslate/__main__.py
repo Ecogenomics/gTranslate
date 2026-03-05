@@ -34,6 +34,7 @@ def print_help():
 
   Tools:
     detect_table  -> Detect the genetic translation table (GTT) used in prokaryotic organisms.
+    generate_plot -> Generate an interactive HTML dashboard to explore the features used for GTT prediction.
 
   Testing:
     test          -> Validate detection of the genetic translation table (GTT) used in prokaryotic organisms.
