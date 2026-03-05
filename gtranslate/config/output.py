@@ -6,6 +6,7 @@ DIR_IDENTIFY_INTERMEDIATE = join(DIR_PREDICT, 'intermediate_results')
 DIR_PREDICT_GENES = join(DIR_IDENTIFY_INTERMEDIATE, 'call_genes')
 DIR_IDENTIFY_FASTA = join(DIR_IDENTIFY_INTERMEDIATE, 'single_copy_fasta')
 PATH_TLN_TABLE_SUMMARY = join(DIR_PREDICT, '{prefix}.translation_table_summary.tsv')
+PATH_FEATURES_SUMMARY = join(DIR_PREDICT, '{prefix}.feature_summary.tsv')
 PATH_FAILS = join(DIR_PREDICT,'{prefix}.failed_genomes.tsv')
 
 # Command: identify -> marker genes

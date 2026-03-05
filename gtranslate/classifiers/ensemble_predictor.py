@@ -90,5 +90,7 @@ class TTPredictor:
         formatted_preds = {key.replace('Classifier', '').lower() + '_pred': value for key, value in
                        ensemble_preds.items()}
 
+        feature_vector = df_aligned.iloc[0].to_dict()
 
-        return best_class, confidence_score, warnings, formatted_preds
+
+        return best_class, confidence_score, warnings, formatted_preds,feature_vector

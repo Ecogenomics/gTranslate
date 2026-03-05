@@ -136,9 +136,7 @@ class Prodigal(object):
             tln_table_file.warnings = summary_stats.pred_warnings
             tln_table_file.confidence = summary_stats.pred_confidence
             tln_table_file.ensemble_preds = summary_stats.ensemble_preds
-
-
-
+            tln_table_file.feature_vector = summary_stats.feature_vector
             tln_table_file.write()
 
             # Create a hash of each file
@@ -183,6 +181,7 @@ class Prodigal(object):
                                   "confidence": translation_table_file.confidence,
                                   "warnings": translation_table_file.warnings,
                                   "ensemble_preds": translation_table_file.ensemble_preds,
+                                  "feature_vector": translation_table_file.feature_vector,
                                   "is_empty": is_empty}
 
                 out_dict[genome_id] = prodigal_infos

@@ -22,6 +22,7 @@ from gtranslate.biolib_lite.execute import check_dependencies
 from gtranslate.config.output import *
 from gtranslate.external.prodigal import Prodigal
 from gtranslate.files.prodigal.tln_table_summary import TranslationSummaryFile, TranslationSummaryFileRow
+from gtranslate.files.featurefile import FeatureFile
 from gtranslate.tools import tqdm_log,symlink_f
 
 
@@ -105,6 +106,7 @@ class TablePredictor(object):
 
         # Summarise the copy number of each AR53 and BAC120 markers.
         tln_summary_file = TranslationSummaryFile(outdir, prefix)
+        feature_file = FeatureFile(outdir, prefix)
 
         for db_genome_id, info in tqdm_log(sorted(gene_dict.items()), unit='genome'):
             # Write the best translation table to disk for this genome.
@@ -128,10 +130,17 @@ class TablePredictor(object):
 
             tln_summary_file.add_row(summary_row)
 
+            features = info.get("feature_vector", {})
+            if features:
+                feature_file.add_row(db_genome_id, info.get("best_translation_table"), features)
+
         tln_summary_file.write()
+        feature_file.write()
 
         #we remove the the outdir from the path to get a relative path
-        relative_path = os.path.relpath(tln_summary_file.path, outdir)
-        symlink_f(relative_path,os.path.join(outdir,os.path.basename(tln_summary_file.path)),force=True)
+        relative_path_tln_summary_file = os.path.relpath(tln_summary_file.path, outdir)
+        relative_path_feature_file = os.path.relpath(feature_file.path, outdir)
+        symlink_f(relative_path_tln_summary_file,os.path.join(outdir,os.path.basename(tln_summary_file.path)),force=True)
+        symlink_f(relative_path_feature_file,os.path.join(outdir,os.path.basename(feature_file.path)),force=True)
 
         return True

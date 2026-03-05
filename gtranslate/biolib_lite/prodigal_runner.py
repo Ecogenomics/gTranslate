@@ -54,6 +54,7 @@ class ConsumerData:
     pred_confidence: float
     pred_warnings: list
     ensemble_preds: dict
+    feature_vector: dict
     metadata: dict = field(default_factory=dict)
 
     def __post_init__(self):
@@ -192,7 +193,7 @@ class Prodigal(object):
 
                 predictor = TTPredictor()
 
-                best_translation_table,pred_confidence,pred_warnings,ensemble_preds = predictor.predict_translation_table(temp_df)
+                best_translation_table,pred_confidence,pred_warnings,ensemble_preds,feature_vector = predictor.predict_translation_table(temp_df)
                 best_translation_table = int(best_translation_table)
 
                 pred_warnings.extend(local_warnings)
@@ -224,7 +225,7 @@ class Prodigal(object):
                                              genome_id + '.gff'), gff_file)
 
         return (genome_id, aa_gene_file, nt_gene_file, gff_file,genome_metadata_dict,
-                pred_confidence,pred_warnings,ensemble_preds,False)
+                pred_confidence,pred_warnings,ensemble_preds,feature_vector,False)
 
     def _consumer(self, produced_data, consumer_data):
         """Consume results from producer processes.
@@ -250,7 +251,7 @@ class Prodigal(object):
         if consumer_data is None:
             consumer_data = {}
 
-        genome_id, aa_gene_file, nt_gene_file, gff_file, metadata_dict, pred_confidence, pred_warnings,ensemble_preds, is_empty = produced_data
+        genome_id, aa_gene_file, nt_gene_file, gff_file, metadata_dict, pred_confidence, pred_warnings,ensemble_preds,feature_vector, is_empty = produced_data
 
 
         for warning in pred_warnings:
@@ -269,7 +270,8 @@ class Prodigal(object):
             pred_confidence=pred_confidence,
             pred_warnings=pred_warnings,
             ensemble_preds=ensemble_preds,
-            metadata=metadata_dict
+            metadata=metadata_dict,
+            feature_vector=feature_vector
         )
         return consumer_data
 
@@ -361,6 +363,7 @@ class Prodigal(object):
             shutil.rmtree(self.output_dir)
 
         return summary_stats
+
 
     def run_prodigal_command(self, translation_table, tmp_dir, genome_id, genome_file, seqs,total_bases):
         aa_gene_file_tmp = os.path.join(tmp_dir, str(

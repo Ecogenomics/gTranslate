@@ -21,6 +21,7 @@ class TlnTableFile(object):
                  contig_count: Optional[int] = None,
                  confidence: Optional[float] = None,
                  ensemble_preds: Optional[dict] = None,
+                 feature_vector:Optional[dict] = None,
                  warnings: Optional[List[str]] = None):
 
         self.path = self.get_path(out_dir, gid)
@@ -33,6 +34,7 @@ class TlnTableFile(object):
         self._contig_count = contig_count
         self._confidence = confidence
         self._ensemble_preds = ensemble_preds or {}
+        self._feature_vector = feature_vector or {}
         self._warnings = warnings or []
 
     def _validate_and_set(self, attribute, value, expected_type):
@@ -132,6 +134,19 @@ class TlnTableFile(object):
             raise GTranslateExit(f'Invalid ensemble_preds value: {v} for {self.path}')
 
     @property
+    def feature_vector(self):
+        return self._feature_vector
+
+    @feature_vector.setter
+    def feature_vector(self, v):
+        if v is None or str(v).strip().upper() in ['N/A', 'NONE', 'NAN', '']:
+            self._feature_vector = {}
+        elif isinstance(v, dict):
+            self._feature_vector = v
+        else:
+            raise GTranslateExit(f'Invalid feature_vector value: {v} for {self.path}')
+
+    @property
     def warnings(self):
         return self._warnings
 
@@ -185,6 +200,11 @@ class TlnTableFile(object):
                             self.ensemble_preds = {}
                         else:
                             self.ensemble_preds = json.loads(val)
+                    elif idx == 'feature_vector':
+                        if val.strip().upper() in ['N/A', 'NONE', 'NAN', '']:
+                            self.feature_vector = {}
+                        else:
+                            self.feature_vector = json.loads(val)
 
         except FileNotFoundError:
             raise GTranslateExit(f'Translation table summary file not found: {self.path}')
@@ -209,6 +229,10 @@ class TlnTableFile(object):
 
                 ensemble_preds_str = json.dumps(self.ensemble_preds) if self.ensemble_preds else 'N/A'
                 fh.write(f'ensemble_preds\t{ensemble_preds_str}\n')
+
+                feature_vector_str = json.dumps(self.feature_vector) if self.feature_vector else 'N/A'
+                fh.write(f'feature_vector\t{feature_vector_str}\n')
+
 
         except Exception as e:
             raise GTranslateExit(f'Error writing file: {self.path} - {e}')
