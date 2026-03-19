@@ -13,10 +13,10 @@ class TTPredictor:
         self.ada = joblib.load(CONFIG.ADA_MULTI_CLASS)
         self.dt = joblib.load(CONFIG.DT_MULTI_CLASS)
         self.knn = joblib.load(CONFIG.KNN_MULTI_CLASS)
-        self.lgbm = joblib.load(CONFIG.LGBM_MULTI_CLASS)
-        self.rf = joblib.load(CONFIG.RF_MULTI_CLASS)
+        self.xgb = joblib.load(CONFIG.XGB_MULTI_CLASS)
+        self.mlp = joblib.load(CONFIG.MLP_MULTI_CLASS)
 
-        self.models = [self.ada, self.dt, self.knn, self.lgbm, self.rf]
+        self.models = [self.ada, self.dt, self.knn, self.xgb, self.mlp]
 
         # Load label encoder
         self.label_encoder = joblib.load(CONFIG.LABEL_ENCODER)

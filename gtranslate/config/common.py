@@ -25,12 +25,12 @@ class __GTranslateCommonConfig:
         return self._get_model_path('knn_multi_class.pkl.gz')
 
     @property
-    def LGBM_MULTI_CLASS(self):
-        return self._get_model_path('lgbm_multi_class.pkl.gz')
+    def XGB_MULTI_CLASS(self):
+        return self._get_model_path('xgb_multi_class.pkl.gz')
 
     @property
-    def RF_MULTI_CLASS(self):
-        return self._get_model_path('rf_multi_class.pkl.gz')
+    def MLP_MULTI_CLASS(self):
+        return self._get_model_path('mlp_multi_class.pkl.gz')
 
     @property
     def LABEL_ENCODER(self):

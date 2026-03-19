@@ -38,15 +38,29 @@ classifier_configs = [
         }
     },
     {
-        "name": "LGBM",
-        "short_name": "lgbm",
-        "custom_label": "LightGBM Fast Trainer",
+
+        "name": "XGBoost",
+        "short_name": "xgb",
+        "custom_label": "XGBoost Gradient Boosting",
         "best_params": {
-            'model__class_weight': 'balanced',
+            'model__eval_metric': 'mlogloss',
             'model__learning_rate': 0.1,
-            'model__n_estimators': 200,
+            'model__n_estimators': 50,
             'model__n_jobs': 1,
-            'model__num_leaves': 15,
+            'model__subsample': 0.5
+        }
+    },
+    {
+        "name": "MLP",
+        "short_name": "mlp",
+        "custom_label": "Multi-layer Perceptron",
+        "best_params": {
+            'model__activation': 'tanh',
+            'model__alpha': 0.0001,
+            'model__hidden_layer_sizes': (20, 10),
+            'model__learning_rate': 'constant',
+            'model__max_iter': 2000,
+            'model__solver': 'adam'
         }
     },
     {

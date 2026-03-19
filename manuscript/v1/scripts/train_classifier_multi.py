@@ -43,14 +43,15 @@ import pandas as pd
 from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 from sklearn.metrics import balanced_accuracy_score
 from sklearn.model_selection import StratifiedKFold, train_test_split
+from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import MinMaxScaler, LabelEncoder
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.utils import compute_class_weight
-from lightgbm import LGBMClassifier
+from xgboost import XGBClassifier
 
-from mlxtend.feature_selection import SequentialFeatureSelector
+
 from script_logger import CustomLogger
 
 # Import classifier configurations
@@ -68,12 +69,13 @@ class ScalerClassifierMulti(object):
     classifiers with pipeline-based feature scaling and model persistence.
     """
 
-    def __init__(self, feature_file, output_dir, threads_count, seed=None):
+    def __init__(self, feature_file, output_dir, threads_count, seed=None,ledger=None):
 
         self.feature_file = feature_file
         self.output_dir = output_dir
         self.thread_count = threads_count
         self.seed = seed
+        self.ledger = ledger
 
         # Initialize the logger
         logger_instance = CustomLogger(output_dir, __prog_name__)
@@ -83,12 +85,13 @@ class ScalerClassifierMulti(object):
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
 
+
         # Map for instantiating raw models
         self.model_mapping = {
             "KNeighbors": KNeighborsClassifier(n_jobs=self.thread_count),
-            "RandomForest": RandomForestClassifier(random_state=self.seed, n_jobs=self.thread_count),
+            "MLP": MLPClassifier(random_state=self.seed),
             "AdaBoost": AdaBoostClassifier(random_state=self.seed),
-            "LGBM": LGBMClassifier(random_state=self.seed, n_jobs=self.thread_count, verbose=-1),
+            "XGBoost": XGBClassifier(random_state=self.seed, n_jobs=self.thread_count, verbose=-1),
             "DecisionTree": DecisionTreeClassifier(random_state=self.seed)
         }
 
@@ -103,6 +106,35 @@ class ScalerClassifierMulti(object):
             raise
 
         df_f['Genome'] = df_f['Genome'].astype(str).str.strip()
+
+        # load the ledger if provided and merge it to overwrite the original ground truth for UNRESOLVED genomes
+        if self.ledger is not None:
+            try:
+                # 1. Read and clean the ledger
+                df_ledger = pd.read_csv(self.ledger, sep='\t')
+                df_ledger['Genome'] = df_ledger['Genome'].astype(str).str.strip()
+                df_ledger = df_ledger.rename(columns={'Translation_table': 'Ledger_TT'})
+
+                # 2. Clean the main dataframe's Genome column to guarantee a perfect match
+                df_f['Genome'] = df_f['Genome'].astype(str).str.strip()
+
+                # 3. Merge the ledger data into the main dataframe
+                df_f = pd.merge(df_f, df_ledger[['Genome', 'Ledger_TT']], on='Genome', how='left')
+
+                # 4. New Mask: Target EVERY row where the ledger provided a value (not NaN)
+                update_mask = df_f['Ledger_TT'].notna()
+
+                # 5. Overwrite the Ground_truth unconditionally for those specific genomes
+                df_f.loc[update_mask, 'Ground_truth'] = df_f.loc[update_mask, 'Ledger_TT']
+
+                # 6. Clean up the temporary column
+                df_f = df_f.drop(columns=['Ledger_TT'])
+
+                self.logger.info(
+                    f"Ledger merged: {df_ledger.shape[0]} entries. Force-updated {update_mask.sum()} genomes.")
+            except Exception as e:
+                self.logger.error(f"Error loading or merging ledger: {e}")
+                raise
 
 
         # Filter Target
@@ -197,7 +229,7 @@ class ScalerClassifierMulti(object):
                 continue
 
             # Build Pipeline (MinMaxScaler for distance-based models)
-            if model_name in ['KNeighbors']:
+            if model_name in ['KNeighbors','MLP']:
                 pipe = Pipeline([
                     ('scaler', MinMaxScaler(feature_range=(0, 1))),
                     ('model', base_model)
@@ -243,6 +275,8 @@ if __name__ == "__main__":
     parser.add_argument('-o', '--output_dir', dest="od", required=True, help='Path to the output directory.')
     parser.add_argument('-s', '--seed', dest="seed", type=int, default=None, help='Seed for reproducibility.')
     parser.add_argument('-t', '--threads', dest="threads", type=int, default=1, help='Number of threads to use.')
+    parser.add_argument('-l', '--ledger', dest="ledger", default=None, help='For genomes flagged as UNRESOLVED, this ledger give a manual ground truth to overwrite the original ground truth. '
+                                                                            'It is a TSV file with 2 columns: Genome and Ground_truth. The Ground_truth column should have the same format as the original ground truth (e.g., 4, 11, 25,UNRESOLVED).')
     parser.add_argument('--split_data', dest="split_data", action='store_true',
                         help='Enable data splitting into training and validation sets.')
 
@@ -253,7 +287,8 @@ if __name__ == "__main__":
             feature_file=args.features,
             output_dir=args.od,
             threads_count=args.threads,
-            seed=args.seed
+            seed=args.seed,
+            ledger=args.ledger
         )
         classifier.run(args.split_data)
     except Exception as e:
