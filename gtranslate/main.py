@@ -201,7 +201,7 @@ class OptionsParser(object):
         """
         self.logger.info('Running generate_plot')
 
-        plotter = FeaturePlotter(options.feature_file, options.output_file)
+        plotter = FeaturePlotter(options.feature_file, options.output_file,options.selected_genome_file)
         plotter.generate_html()
 
 

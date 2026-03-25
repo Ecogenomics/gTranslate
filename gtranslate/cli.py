@@ -73,6 +73,10 @@ def __temp_dir(group):
                        help="specify alternative directory for temporary files")
 
 
+def __selected_genome_file(group):
+    group.add_argument('--selected_genome_file', type=str, default=None,
+                          help="path to file containing the list of selected genomes.One genome ID per line.")
+
 
 def get_main_parser():
     # Setup the main, and sub parsers.
@@ -101,7 +105,8 @@ def get_main_parser():
             __feature_file(grp, required=True)
             __ouput_file(grp, required=True)
         with arg_group(parser, 'optional arguments') as grp:
-             __help(grp)
+            __selected_genome_file(grp)
+            __help(grp)
 
 
     with subparser(sub_parsers, 'test', 'Validate detection of the genetic translation table (GTT) '
