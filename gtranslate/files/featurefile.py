@@ -35,7 +35,7 @@ class FeatureFile(object):
 
         self.rows[gid] = row_data
 
-    def write(self):
+    def write(self,training_features=False) -> None:
         """Writes the feature file using csv.DictWriter."""
         if not self.rows:
             return  # Nothing to write
@@ -43,7 +43,12 @@ class FeatureFile(object):
         make_sure_path_exists(os.path.dirname(self.path))
 
         # Put genome and prediction first, followed by all dynamically found features
-        columns_names = ['user_genome', 'predicted_tln_table'] + self.feature_columns
+        if training_features:
+            columns_names = ['Genome ID']+ self.feature_columns
+            data_key_map = {'Genome ID': 'user_genome'}
+        else:
+            columns_names = ['user_genome', 'predicted_tln_table'] + self.feature_columns
+            data_key_map = {}
 
         with open(self.path, 'w', newline='') as fh:
             writer = csv.DictWriter(fh, fieldnames=columns_names, delimiter='\t')
@@ -52,7 +57,8 @@ class FeatureFile(object):
             for gid, row_dict in sorted(self.rows.items()):
                 clean_dict = {}
                 for col in columns_names:
-                    val = row_dict.get(col, self.none_value)
+                    lookup_key = data_key_map.get(col, col)
+                    val = row_dict.get(lookup_key, self.none_value)
 
                     # Clean up data types for export
                     if val is None:

@@ -136,65 +136,65 @@ class ScalerClassifierMulti(object):
                 self.logger.error(f"Error loading or merging ledger: {e}")
                 raise
 
-            # Define the target feature columns
-            self.feature_cols = [
-                'Coding_density_4', 'Coding_density_11', 'Density_Diff', 'GC',
-                'Trp_ratio', 'Trp_magnitude', 'Gly_ratio', 'UGG_density'
-            ]
+        # Define the target feature columns
+        self.feature_cols = [
+            'Coding_density_4', 'Coding_density_11', 'Density_Diff', 'GC',
+            'Trp_ratio', 'Trp_magnitude', 'Gly_ratio', 'UGG_density'
+        ]
 
-            # =========================
-            # Conditional Feature Engineering
-            # =========================
+        # =========================
+        # Conditional Feature Engineering
+        # =========================
 
-            # Check if all required feature columns already exist
-            missing_cols = [col for col in self.feature_cols if col not in df_f.columns]
+        # Check if all required feature columns already exist
+        missing_cols = [col for col in self.feature_cols if col not in df_f.columns]
 
-            if not missing_cols:
-                self.logger.info("All feature columns present in input. Skipping feature engineering.")
-            else:
-                self.logger.info(f"Missing columns: {missing_cols}. Performing feature engineering...")
+        if not missing_cols:
+            self.logger.info("All feature columns present in input. Skipping feature engineering.")
+        else:
+            self.logger.info(f"Missing columns: {missing_cols}. Performing feature engineering...")
 
-                # Ensure base columns exist before calculating
-                required_base_cols = ['Coding_density_4', 'Coding_density_11', 'tt4_uga_count', 'tt4_ugg_count',
-                                      'tt4_std_gly_count']
-                if not all(col in df_f.columns for col in required_base_cols):
-                    self.logger.error("Base columns for feature engineering are missing. Check input data.")
-                    raise ValueError(f"Missing base columns. Required: {required_base_cols}")
+            # Ensure base columns exist before calculating
+            required_base_cols = ['Coding_density_4', 'Coding_density_11', 'tt4_uga_count', 'tt4_ugg_count',
+                                  'tt4_std_gly_count']
+            if not all(col in df_f.columns for col in required_base_cols):
+                self.logger.error("Base columns for feature engineering are missing. Check input data.")
+                raise ValueError(f"Missing base columns. Required: {required_base_cols}")
 
-                df_f['Density_Diff'] = df_f['Coding_density_4'] - df_f['Coding_density_11']
-                df_f['Trp_ratio'] = np.log((df_f['tt4_uga_count'] + 1) / (df_f['tt4_ugg_count'] + 1)).clip(-6.0,
-                                                                                                           5.0)
-                df_f['Trp_magnitude'] = np.log(df_f['tt4_uga_count'] + df_f['tt4_ugg_count'] + 1)
-                df_f['Gly_ratio'] = np.log((df_f['tt4_uga_count'] + 1) / (df_f['tt4_std_gly_count'] + 1)).clip(
-                    -10.0, 0.0)
-                df_f['UGG_density'] = (df_f['tt4_ugg_count'] / df_f['tt4_std_gly_count'])
+            df_f['Density_Diff'] = df_f['Coding_density_4'] - df_f['Coding_density_11']
+            df_f['Trp_ratio'] = np.log((df_f['tt4_uga_count'] + 1) / (df_f['tt4_ugg_count'] + 1)).clip(-6.0,
+                                                                                                       5.0)
+            df_f['Trp_magnitude'] = np.log(df_f['tt4_uga_count'] + df_f['tt4_ugg_count'] + 1)
+            df_f['Gly_ratio'] = np.log((df_f['tt4_uga_count'] + 1) / (df_f['tt4_std_gly_count'] + 1)).clip(
+                -10.0, 0.0)
+            df_f['UGG_density'] = (df_f['tt4_ugg_count'] / df_f['tt4_std_gly_count'])
 
-            # Handle NaNs before saving
-            if df_f[self.feature_cols].isnull().any().any():
-                self.logger.warning("NaN values generated or found. Filling with 0.")
-                df_f[self.feature_cols] = df_f[self.feature_cols].fillna(0)
+        # Handle NaNs before saving
+        if df_f[self.feature_cols].isnull().any().any():
+            self.logger.warning("NaN values generated or found. Filling with 0.")
+            df_f[self.feature_cols] = df_f[self.feature_cols].fillna(0)
 
-            # =========================
-            # Save FULL dataset (includes unresolved)
-            # =========================
+        # =========================
+        # Save FULL dataset (includes unresolved)
+        # =========================
 
-            cols_to_save = ['Genome', 'Ground_truth'] + self.feature_cols
-            existing_cols = [c for c in cols_to_save if c in df_f.columns]
+        cols_to_save = ['Genome', 'Ground_truth'] + self.feature_cols
+        existing_cols = [c for c in cols_to_save if c in df_f.columns]
 
-            output_path = os.path.join(self.output_dir, 'preprocessed_with_unresolved.tsv')
-            df_f[existing_cols].to_csv(output_path, sep='\t', index=False)
-            self.logger.info(f"Full dataset (including unresolved genomes) saved to {output_path}")
+        output_path = os.path.join(self.output_dir, 'preprocessed_with_unresolved.tsv')
+        df_f[existing_cols].to_csv(output_path, sep='\t', index=False)
+        self.logger.info(f"Full dataset (including unresolved genomes) saved to {output_path}")
 
-            # =========================
-            # Filter valid targets
-            # =========================
+        # =========================
+        # Filter valid targets
+        # =========================
 
-            valid_targets = ['11', '4', '25']
-            df = df_f[df_f['Ground_truth'].astype(str).isin(valid_targets)].copy()
+        valid_targets = ['11', '4', '25']
+        df = df_f[df_f['Ground_truth'].astype(str).isin(valid_targets)].copy()
 
-            self.logger.info(f"Merged dataset shape after target filtering: {df.shape}")
+        self.logger.info(f"Merged dataset shape after target filtering: {df.shape}")
 
-            return df
+        return df
     def run(self, split_data=False):
         """Execute the full training pipeline across multiple classifiers."""
         self.logger.info(f'{__prog_name__} {" ".join(sys.argv[1:])}')

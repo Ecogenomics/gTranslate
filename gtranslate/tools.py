@@ -128,7 +128,7 @@ def symlink_f(src, dst, force=True):
     os.symlink(src, dst)
 
 
-def remove_intermediate_files(output_dir,wf_name):
+def remove_intermediate_files(output_dir):
     """Remove intermediate files.
 
     Parameters

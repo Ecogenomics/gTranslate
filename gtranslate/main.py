@@ -36,6 +36,7 @@ from gtranslate.misc import Misc
 from gtranslate.plots.plotter import FeaturePlotter
 from gtranslate.tbl_predictor import TablePredictor
 from gtranslate.tools import remove_intermediate_files
+from gtranslate.training_manager import TrainingManager
 
 
 class OptionsParser(object):
@@ -187,7 +188,7 @@ class OptionsParser(object):
 
         if not options.keep_called_genes:
             self.logger.info('Cleaning up intermediate files.')
-            self.remove_intermediate_files(options.out_dir, 'classify_wf')
+            self.remove_intermediate_files(options.out_dir)
 
         self.logger.info('Done.')
 
@@ -206,6 +207,58 @@ class OptionsParser(object):
 
 
         self.logger.info('Done.')
+
+    def ground_truth(self, options):
+        """Determine the ground truth for genomes based on their taxonomic classification.
+
+        Parameters
+        ----------
+        options : argparse.Namespace
+            The CLI arguments input by the user.
+        """
+        self.logger.info('Selecting Ground Truth translation tables based on taxonomic classification.')
+
+        training_manager=TrainingManager()
+        training_manager.select_ground_truth(options.taxonomy_file, options.output_file, options.manual_gt_file)
+
+        self.logger.info('Done.')
+
+    def build_features(self, options):
+        """Generate feature vectors for training models.
+
+        Parameters
+        ----------
+        options : argparse.Namespace
+            The CLI arguments input by the user.
+        """
+        self.logger.info('Generating feature vectors for training models.')
+
+        genomes = self._genomes_to_process(options.genome_dir,
+                                                       options.batchfile,
+                                                       options.extension)
+
+        training_manager=TrainingManager(cpus=options.cpus)
+        training_manager.build_features(genomes, options.out_dir,options.force)
+
+        self.logger.info('Done.')
+
+    def fit_models(self, options):
+        """Train the models based on training data.
+
+        Parameters
+        ----------
+        options : argparse.Namespace
+            The CLI arguments input by the user.
+        """
+        self.logger.info('Training models based on training data.')
+
+        training_manager=TrainingManager(cpus=options.cpus,seed=options.seed)
+
+        training_manager.fit_models(options.feature_file, options.tt_file,options.out_dir,options.split_data)
+
+        self.logger.info('Done.')
+
+
 
     def run_test(self, options):
         """Run the test suite. To make sure the program is working as expected.
@@ -289,7 +342,7 @@ class OptionsParser(object):
 
 
 
-    def remove_intermediate_files(self,out_dir,workflow_name):
+    def remove_intermediate_files(self,out_dir):
         """Remove intermediate files from the output directory.
         Parameters
         ----------
@@ -302,7 +355,7 @@ class OptionsParser(object):
             self.logger.warning(f'Output directory does not exist: {out_dir}. Skipping cleanup.')
             return
         self.logger.info('Deleting generated gene files.')
-        remove_intermediate_files(out_dir,workflow_name)
+        remove_intermediate_files(out_dir)
         self.logger.info('gene files deleted.')
 
     def parse_options(self, options):
@@ -336,6 +389,12 @@ class OptionsParser(object):
             self.run_test(options)
         elif options.subparser_name == 'check_install':
             self.check_install(options)
+        elif options.subparser_name == 'ground_truth':
+            self.ground_truth(options)
+        elif options.subparser_name == 'build_features':
+            self.build_features(options)
+        elif options.subparser_name == 'fit_models':
+            self.fit_models(options)
         else:
             raise GTranslateExit(f'Unknown gTranslate command: {options.subparser_name}')
 

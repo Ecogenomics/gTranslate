@@ -78,6 +78,29 @@ def __selected_genome_file(group):
                           help="path to file containing the list of selected genomes.One genome ID per line.")
 
 
+def __taxonomy_file(group, required):
+    group.add_argument('--taxonomy_file', type=str, default=None, required=required,
+                       help="File indicating taxonomic classification of each genome.")
+
+
+def __tt_file(group, required):
+    group.add_argument('--tt_file', type=str, default=None, required=required,
+                       help="File indicating the translation table for each genome.")
+
+def __seed(group):
+    group.add_argument('--seed', type=int, default=None,
+                       help='seed for reproducibility')
+
+def __split_data(group):
+    group.add_argument('--split_data', action='store_true',
+                       help="Enable data splitting into training and validation sets.")
+
+
+def __manual_gt_file(group):
+    group.add_argument('--manual_gt_file', type=str, default=None,
+                       help="File indicating manually specific ground truth for select genomes.")
+
+
 def get_main_parser():
     # Setup the main, and sub parsers.
     main_parser = argparse.ArgumentParser(
@@ -120,5 +143,38 @@ def get_main_parser():
     with subparser(sub_parsers, 'check_install', 'Check the installation of the required dependencies.') as parser:
         with arg_group(parser, 'optional arguments') as grp:
             __help(grp)
+
+    # Training
+    with subparser(sub_parsers, 'ground_truth', 'Determine ground truth based on taxonomic classification.') as parser:
+        with arg_group(parser, 'required named arguments') as grp:
+            __taxonomy_file(grp, required=True)
+            __ouput_file(grp, required=True)
+        with arg_group(parser, 'optional arguments') as grp:
+            __manual_gt_file(grp)
+            __help(grp)
+
+    with subparser(sub_parsers, 'build_features', 'Generate feature vectors for training models.') as parser:
+        with mutex_group(parser, required=True) as grp:
+            __genome_dir(grp)
+            __batchfile(grp)
+        with arg_group(parser, 'required named arguments') as grp:
+            __out_dir(grp, required=True)
+        with arg_group(parser, 'optional arguments') as grp:
+            __cpus(grp)
+            __extension(grp)
+            __force(grp)
+            __help(grp)
+
+    with subparser(sub_parsers, 'fit_models', 'Fit models based on selected genomes.') as parser:
+        with arg_group(parser, 'required named arguments') as grp:
+            __feature_file(grp, required=True)
+            __tt_file(grp, required=True)
+            __out_dir(grp, required=True)
+        with arg_group(parser, 'optional arguments') as grp:
+            __cpus(grp)
+            __seed(grp)
+            __split_data(grp)
+            __help(grp)
+
 
     return main_parser
