@@ -2,7 +2,7 @@
 
 **gTranslate** is a machine learning-based command-line tool designed to automatically detect and predict the genetic translation table (GTT) used in prokaryotic genomes. 
 
-By analyzing specific sequence features—such as coding density differences, Trp ratios, and Gly ratios—`gTranslate` utilizes advanced classifiers (including XGBoost and LightGBM) to accurately distinguish between different genetic codes, particularly focusing on the identification of recoding events associated with Translation Tables 11, 4 (UGA=Trp), and 25 (UGA=Gly).
+By analyzing specific sequence features—such as coding density differences, Trp ratios, and Gly ratios—`gTranslate` utilizes advanced classifiers to accurately distinguish between different genetic codes, particularly focusing on the identification of recoding events associated with Translation Tables 11, 4 (UGA=Trp), and 25 (UGA=Gly).
 
 ## Features
 
