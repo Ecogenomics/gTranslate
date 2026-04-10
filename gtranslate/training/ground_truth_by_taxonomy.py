@@ -59,7 +59,9 @@ class GroundTruthByTaxonomy(object):
 
         # Ground truth from NCBI classifications
         self.NCBI_TT4 = set(['s__Candidatus Hodgkinia cicadicola', 's__Candidatus Nasuia deltocephalinicola', 's__Candidatus Stammera capleta'])
+        self.NCBI_TT4.update(set(['s__Candidatus Organicella extenuata', 's__Candidatus Pinguicoccus supinus']))
         self.NCBI_TT4.update(set(['s__Hodgkinia cicadicola', 's__Nasuia deltocephalinicola', 's__Stammera capleta']))
+        self.NCBI_TT4.update(set(['s__Organicella extenuata', 's__Pinguicoccus supinus']))
 
         # These species clusters have an unclear ground truth, see https://doi.org/10.1093/gbe/evad164
         self.GTDB_UNRESOLVED = set(['s__Providencia_A siddallii', 's__Providencia_A siddallii_A'])
