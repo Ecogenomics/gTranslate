@@ -1,3 +1,4 @@
+import os
 from collections import Counter
 
 import joblib
@@ -6,22 +7,33 @@ import numpy as np
 from gtranslate.config.common import CONFIG
 
 class TTPredictor:
-    def __init__(self):
+    def __init__(self,custom_model_path=None):
         """
         Initializes the predictor by loading models directly via the centralized CONFIG.
         """
-        self.ada = joblib.load(CONFIG.ADA_MULTI_CLASS)
-        self.dt = joblib.load(CONFIG.DT_MULTI_CLASS)
-        self.knn = joblib.load(CONFIG.KNN_MULTI_CLASS)
-        self.xgb = joblib.load(CONFIG.XGB_MULTI_CLASS)
-        self.mlp = joblib.load(CONFIG.MLP_MULTI_CLASS)
+
+
+        # Helper function to decide which path to use
+        def resolve_path(default_config_path):
+            if custom_model_path is not None:
+                # Extract the filename (e.g., 'ada_multi_class.pkl.gz') and join it with the custom dir
+                filename = os.path.basename(default_config_path)
+                return os.path.join(custom_model_path, filename)
+            return default_config_path
+
+        # Load models using the resolved paths
+        self.ada = joblib.load(resolve_path(CONFIG.ADA_MULTI_CLASS))
+        self.dt = joblib.load(resolve_path(CONFIG.DT_MULTI_CLASS))
+        self.knn = joblib.load(resolve_path(CONFIG.KNN_MULTI_CLASS))
+        self.xgb = joblib.load(resolve_path(CONFIG.XGB_MULTI_CLASS))
+        self.mlp = joblib.load(resolve_path(CONFIG.MLP_MULTI_CLASS))
 
         self.models = [self.ada, self.dt, self.knn, self.xgb, self.mlp]
 
         # Load label encoder
-        self.label_encoder = joblib.load(CONFIG.LABEL_ENCODER)
+        self.label_encoder = joblib.load(resolve_path(CONFIG.LABEL_ENCODER))
 
-    def predict_translation_table(self, df):
+    def predict_translation_table(self, df,custom_model_path=None):
         """
         Predicts using all 5 models, takes the majority vote, and decodes the label.
         """

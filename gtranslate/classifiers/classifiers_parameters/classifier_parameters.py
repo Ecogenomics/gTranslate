@@ -16,17 +16,17 @@ classifier_configs = [
              'model__n_neighbors': 2,
              'model__weights': 'uniform'}
     },
-    {
-        "name": "RandomForest",
-        "short_name": "rf",
-        "custom_label": "Production RF - V1",
-        "best_params":
-            {'model__class_weight': 'balanced',
-             'model__min_samples_leaf': 2,
-             'model__min_samples_split': 6,
-             'model__n_estimators': 50,
-             'model__n_jobs': 1}
-    },
+    # {
+    #     "name": "RandomForest",
+    #     "short_name": "rf",
+    #     "custom_label": "Production RF - V1",
+    #     "best_params":
+    #         {'model__class_weight': 'balanced',
+    #          'model__min_samples_leaf': 2,
+    #          'model__min_samples_split': 6,
+    #          'model__n_estimators': 50,
+    #          'model__n_jobs': 1}
+    # },
     {
         "name": "AdaBoost",
         "short_name": "ada",

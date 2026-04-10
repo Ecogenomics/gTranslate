@@ -45,8 +45,9 @@ setup(
             'gtranslate = gtranslate.__main__:main'
         ]
     },
-    install_requires=['joblib ~= 1.3','numpy ~= 1.26','pandas ~= 2.2','scikit-learn ~= 1.6','scipy ~= 1.12',
-                      'tqdm ~= 4.67','imblearn ~= 0.0', 'imbalanced-learn ~= 0.13', 'mlxtend ~= 0.23','plotly ~= 5.15'],
+    install_requires=['joblib ~= 1.3','numpy ~= 1.26','pandas ~= 2.2','scikit-learn == 1.6.1','scipy ~= 1.12',
+                      'tqdm ~= 4.67','imblearn ~= 0.0', 'imbalanced-learn ~= 0.13', 'mlxtend ~= 0.23','plotly ~= 5.15',
+                      'xgboost == 2.1.4','lightgbm == 4.6.0'],
     license=meta['license'],
     long_description=readme(),
     long_description_content_type='text/markdown',

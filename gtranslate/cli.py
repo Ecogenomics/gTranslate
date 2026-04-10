@@ -101,6 +101,11 @@ def __manual_gt_file(group):
                        help="File indicating manually specific ground truth for select genomes.")
 
 
+def __custom_model_path(group):
+    group.add_argument('--custom_model_path', type=str, default=None,
+                       help="Path to file containing custom models.")
+
+
 def get_main_parser():
     # Setup the main, and sub parsers.
     main_parser = argparse.ArgumentParser(
@@ -119,6 +124,7 @@ def get_main_parser():
             __extension(grp)
             __temp_dir(grp)
             __cpus(grp)
+            __custom_model_path(grp)
             __keep_called_genes(grp)
             __prefix(grp)
             __force(grp)

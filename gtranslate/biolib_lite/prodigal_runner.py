@@ -94,7 +94,7 @@ class Prodigal(object):
             Fasta file for genome.
         """
 
-        genome_id,genome_file = genome_file_tuple
+        genome_id,genome_file,custom_model_path = genome_file_tuple
 
         aa_gene_file = os.path.join(self.output_dir, genome_id + '_genes.faa')
         nt_gene_file = os.path.join(self.output_dir, genome_id + '_genes.fna')
@@ -191,7 +191,9 @@ class Prodigal(object):
 
                 temp_df['UGG_density'] = table_trp_counts[4]['UGG'] / (table_trp_counts[4]['GLY'])
 
-                predictor = TTPredictor()
+
+
+                predictor = TTPredictor(custom_model_path)
 
                 best_translation_table,pred_confidence,pred_warnings,ensemble_preds,feature_vector = predictor.predict_translation_table(temp_df)
                 best_translation_table = int(best_translation_table)

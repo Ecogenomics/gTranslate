@@ -88,7 +88,7 @@ class TrainingManager(object):
             "KNeighbors": KNeighborsClassifier(n_jobs=self.cpus),
             "MLP": MLPClassifier(random_state=self.seed),
             "AdaBoost": AdaBoostClassifier(random_state=self.seed),
-            "XGBoost": XGBClassifier(random_state=self.seed, n_jobs=self.cpus, verbose=-1),
+            "XGBoost": XGBClassifier(random_state=self.seed, n_jobs=self.cpus),
             "DecisionTree": DecisionTreeClassifier(random_state=self.seed)
         }
 
@@ -358,10 +358,13 @@ class TrainingManager(object):
             pipe.fit(X_train_current, y_train)
 
             # Save the fitted pipeline
-            model_out_path = os.path.join(out_dir, f'{short_name}_multi_class.pkl')
+            model_out_path = os.path.join(out_dir, f'{short_name}_multi_class.pkl.gz')
             try:
+                # joblib detects the .gz extension and automatically compresses it
                 joblib.dump(pipe, model_out_path)
-                self.logger.info(f"Saved {model_name} pipeline to {model_out_path}")
+                self.logger.info(f"Saved and compressed {model_name} pipeline to {model_out_path}")
+                # gzip the model
+
             except Exception as e:
                 self.logger.error(f"Error saving {model_name}: {e}")
                 continue

@@ -70,7 +70,7 @@ class Prodigal(object):
         except:
             return "(version unavailable)"
 
-    def _run_prodigal(self, genome_id, fasta_path):
+    def _run_prodigal(self, genome_id, fasta_path,custom_model_path):
         """Run Prodigal.
 
         Parameters
@@ -98,8 +98,10 @@ class Prodigal(object):
             return aa_gene_file, nt_gene_file, gff_file, tln_table_file, True , False
 
         # Run Prodigal
+
+
         runnerprodigal = RunnerProdigal(1, False)
-        summary_stats = runnerprodigal.run([(genome_id,fasta_path)], output_dir,
+        summary_stats = runnerprodigal.run([(genome_id,fasta_path,custom_model_path)], output_dir,
                                      called_genes=False)
 
         # An error occurred in BioLib Prodigal.
@@ -155,9 +157,9 @@ class Prodigal(object):
             if data is None:
                 break
 
-            genome_id, file_path = data
+            genome_id, file_path,custom_model_path = data
 
-            rtn_files = self._run_prodigal(genome_id, file_path)
+            rtn_files = self._run_prodigal(genome_id, file_path,custom_model_path)
             was_skipped = False
 
             # Only proceed if an error didn't occur in BioLib Prodigal
@@ -199,7 +201,7 @@ class Prodigal(object):
                 except ValueError:
                     pass  # Handle unexpected item structures gracefully
 
-    def run(self, genomic_files):
+    def run(self, genomic_files,custom_model_path=None):
         """Run Prodigal across a set of genomes.
 
         Parameters
@@ -214,8 +216,11 @@ class Prodigal(object):
         worker_queue = mp.Queue()
         writer_queue = mp.Queue()
 
+        if custom_model_path:
+            self.logger.warning(f"Custom model path provided. Overriding default models with custom models from {custom_model_path}.")
+
         for genome_id, file_path in genomic_files.items():
-            worker_queue.put((genome_id, file_path))
+            worker_queue.put((genome_id, file_path, custom_model_path))
 
         for _ in range(self.threads):
             worker_queue.put(None)

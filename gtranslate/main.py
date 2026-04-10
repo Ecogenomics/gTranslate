@@ -180,7 +180,7 @@ class OptionsParser(object):
                                                        options.batchfile,
                                                        options.extension)
 
-        table_predictor = TablePredictor(options.cpus)
+        table_predictor = TablePredictor(options.cpus,options.custom_model_path)
         reports = table_predictor.predict(genomes,
                          options.out_dir,
                          options.prefix,

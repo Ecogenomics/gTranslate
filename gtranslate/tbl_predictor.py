@@ -29,7 +29,7 @@ from gtranslate.tools import tqdm_log,symlink_f
 class TablePredictor(object):
     """Predict the genetic translation table (GTT) used in prokaryotic organisms."""
 
-    def __init__(self, cpus=1,debug=False):
+    def __init__(self, cpus=1,custom_model_path=None,debug=False):
         """Initialize."""
 
         self.logger = logging.getLogger('timestamp')
@@ -40,6 +40,8 @@ class TablePredictor(object):
         self.nt_gene_file_suffix = NT_GENE_FILE_SUFFIX
         self.gff_file_suffix = GFF_FILE_SUFFIX
         self.checksum_suffix = CHECKSUM_SUFFIX
+
+        self.custom_model_path = custom_model_path
 
         self.cpus = cpus
         self.debug = debug
@@ -82,7 +84,7 @@ class TablePredictor(object):
             self.logger.log(
                 CONFIG.LOG_TASK, f'Running Prodigal {prodigal.version} to identify genes.')
 
-            genome_dictionary = prodigal.run(genomes)
+            genome_dictionary = prodigal.run(genomes,self.custom_model_path)
 
 
             gene_files = [(db_genome_id, genome_dictionary[db_genome_id]['aa_gene_path'])
