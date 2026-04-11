@@ -16,6 +16,7 @@ from gtranslate.config.output import CHECKSUM_SUFFIX, DIR_IDENTIFY_INTERMEDIATE
 from gtranslate.biolib_lite.seq_io import read_fasta
 
 order_rank = ["d__", "p__", "c__", "o__", 'f__', 'g__', 's__']
+
 ##################################################
 ############MISC UTILITIES########################
 ##################################################
@@ -244,4 +245,3 @@ class tqdm_log(object):
 
     def __del__(self):
         self.tqdm.close()
-

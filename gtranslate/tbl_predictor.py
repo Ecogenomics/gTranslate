@@ -23,7 +23,7 @@ from gtranslate.config.output import *
 from gtranslate.external.prodigal import Prodigal
 from gtranslate.files.prodigal.tln_table_summary import TranslationSummaryFile, TranslationSummaryFileRow
 from gtranslate.files.featurefile import FeatureFile
-from gtranslate.tools import tqdm_log,symlink_f
+from gtranslate.tools import tqdm_log, symlink_f
 
 
 class TablePredictor(object):
