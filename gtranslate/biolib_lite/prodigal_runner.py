@@ -32,9 +32,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 
-from . import seq_tk
 from .common import make_sure_path_exists, check_file_exists
 from .execute import check_on_path
 from .parallel import Parallel

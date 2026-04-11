@@ -18,8 +18,6 @@
 import logging
 import os
 
-import shutil
-
 from gtranslate.biolib_lite.execute import check_dependencies
 from gtranslate.biolib_lite.logger import colour
 from gtranslate.exceptions import GTranslateExit

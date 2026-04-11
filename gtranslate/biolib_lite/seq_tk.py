@@ -22,18 +22,10 @@ __license__ = 'GPL3'
 __maintainer__ = 'Donovan Parks'
 __email__ = 'donovan.parks@gmail.com'
 
-import string
 from collections import Counter
 
+
 """Sequence manipulation and statistics."""
-
-
-# _complements = "".maketrans('acgtrymkbdhvACGTRYMKBDHV', 'tgcayrkmvhdbTGCAYRKMVHDB')
-
-# def rev_comp(seq):
-#    """Reverse complement a sequence."""
-#    return seq.translate(_complements)[::-1]
-
 
 def count_nt(seq):
     """Count occurrences of each nucleotide in a sequence.
