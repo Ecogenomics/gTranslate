@@ -20,11 +20,8 @@ import multiprocessing as mp
 import os
 import shutil
 import subprocess
-from time import sleep
 
-from tqdm import tqdm
-
-from gtranslate.biolib_lite.prodigal_runner import Prodigal as RunnerProdigal
+from gtranslate.biolib_lite.prodigal_runner import Prodigal as ProdigalRunner
 from gtranslate.config.output import CHECKSUM_SUFFIX
 from gtranslate.exceptions import ProdigalException
 from gtranslate.files.prodigal.tln_table import TlnTableFile
@@ -70,7 +67,7 @@ class Prodigal(object):
         except:
             return "(version unavailable)"
 
-    def _run_prodigal(self, genome_id, fasta_path,custom_model_path):
+    def _run_prodigal(self, genome_id, fasta_path, custom_model_path):
         """Run Prodigal.
 
         Parameters
@@ -98,11 +95,8 @@ class Prodigal(object):
             return aa_gene_file, nt_gene_file, gff_file, tln_table_file, True , False
 
         # Run Prodigal
-
-
-        runnerprodigal = RunnerProdigal(1, False)
-        summary_stats = runnerprodigal.run([(genome_id,fasta_path,custom_model_path)], output_dir,
-                                     called_genes=False)
+        pr = ProdigalRunner(1, False)
+        summary_stats = pr.run([(genome_id, fasta_path, custom_model_path)], output_dir, called_genes=False)
 
         # An error occurred in BioLib Prodigal.
         if not summary_stats:
@@ -141,7 +135,7 @@ class Prodigal(object):
             tln_table_file.feature_vector = summary_stats.feature_vector
             tln_table_file.write()
 
-            # Create a hash of each file
+            # create a hash of each file
             for out_file in out_files:
                 if out_file is not None:
                     with open(out_file + CHECKSUM_SUFFIX, 'w') as fh:
@@ -165,28 +159,30 @@ class Prodigal(object):
             # Only proceed if an error didn't occur in BioLib Prodigal
             if rtn_files:
                 aa_gene_file, nt_gene_file, gff_file, translation_table_file,was_skipped,is_empty = rtn_files
+
                 if was_skipped:
-                    #print(f'{genome_id} was skipped')
                     with n_skipped.get_lock():
                         n_skipped.value += 1
+
                 prodigal_infos = {"aa_gene_path": aa_gene_file,
-                                  "nt_gene_path": nt_gene_file,
-                                  "gff_path": gff_file,
-                                  "translation_table_path": translation_table_file.path,
-                                  "best_translation_table": translation_table_file.best_tln_table,
-                                  "coding_density_4": translation_table_file.coding_density_4,
+                                    "nt_gene_path": nt_gene_file,
+                                    "gff_path": gff_file,
+                                    "translation_table_path": translation_table_file.path,
+                                    "best_translation_table": translation_table_file.best_tln_table,
+                                    "coding_density_4": translation_table_file.coding_density_4,
                                     "coding_density_11": translation_table_file.coding_density_11,
                                     "gc_percent": translation_table_file.gc_percent,
                                     "n50": translation_table_file.n50,
                                     "genome_size": translation_table_file.genome_size,
                                     "contig_count": translation_table_file.contig_count,
-                                  "confidence": translation_table_file.confidence,
-                                  "warnings": translation_table_file.warnings,
-                                  "ensemble_preds": translation_table_file.ensemble_preds,
-                                  "feature_vector": translation_table_file.feature_vector,
-                                  "is_empty": is_empty}
+                                    "confidence": translation_table_file.confidence,
+                                    "warnings": translation_table_file.warnings,
+                                    "ensemble_preds": translation_table_file.ensemble_preds,
+                                    "feature_vector": translation_table_file.feature_vector,
+                                    "is_empty": is_empty}
 
                 out_dict[genome_id] = prodigal_infos
+
             writer_queue.put((genome_id,was_skipped))
 
     def _writer(self, num_items, writer_queue):
@@ -201,7 +197,7 @@ class Prodigal(object):
                 except ValueError:
                     pass  # Handle unexpected item structures gracefully
 
-    def run(self, genomic_files,custom_model_path=None):
+    def run(self, genomic_files, custom_model_path=None):
         """Run Prodigal across a set of genomes.
 
         Parameters
@@ -308,4 +304,5 @@ class Prodigal(object):
                     fails.write(f'{empty_gid}\tEmpty file\n')
 
         fails.close()
+
         return result_dict

@@ -22,28 +22,26 @@ __license__ = 'GPL3'
 __maintainer__ = 'Donovan Parks'
 __email__ = 'donovan.parks@gmail.com'
 
-import itertools
 import logging
 import ntpath
 import os
 import shutil
 import subprocess
 import tempfile
-from collections import defaultdict, namedtuple
 from dataclasses import dataclass, field
 
-import joblib
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
 from . import seq_tk
-from .common import remove_extension, make_sure_path_exists, check_file_exists
+from .common import make_sure_path_exists, check_file_exists
 from .execute import check_on_path
 from .parallel import Parallel
 from .seq_io import read_fasta, write_fasta
-from .seq_tk import gc, N50
+from .seq_tk import N50, calculate_gc_content
 from ..classifiers.ensemble_predictor import TTPredictor
+
 
 @dataclass
 class ConsumerData:
@@ -60,8 +58,6 @@ class ConsumerData:
     def __post_init__(self):
         for key, value in self.metadata.items():
             setattr(self, key, value) # Dynamically add metadata keys as attributes
-
-
 
 
 class Prodigal(object):
@@ -120,8 +116,23 @@ class Prodigal(object):
                                     'Skipped: {}'.format(genome_file))
                 return (genome_id, aa_gene_file, nt_gene_file, gff_file, {}, 0.0, ["Skipped: Empty genome"], True)
 
-            ksignature = GenomicSignatures(4, threads=1)
             with tempfile.TemporaryDirectory('gtranslate_prodigal_tmp_') as tmp_dir:
+                # if this is a gzipped genome, re-write the uncompressed genome
+                # file to disk
+                prodigal_input = genome_file
+                if genome_file.endswith('.gz'):
+                    prodigal_input = os.path.join(tmp_dir, os.path.basename(genome_file[0:-3]) + '.fna')
+                    write_fasta(seqs, prodigal_input)
+
+                # there may be ^M character in the input file,
+                # the following code is similar to dos2unix command to remove
+                # those special characters.
+                with open(prodigal_input, 'r') as fh:
+                    text = fh.read().replace('\r\n', '\n')
+                processed_prodigal_input = os.path.join(
+                    tmp_dir, os.path.basename(prodigal_input))
+                with open(processed_prodigal_input, 'w') as fh:
+                    fh.write(text)
 
                 # determine number of bases
                 total_bases = 0
@@ -130,13 +141,13 @@ class Prodigal(object):
 
                 # call genes under different translation tables
                 translation_tables = [4, 11]
-
                 local_warnings = []
                 for translation_table in translation_tables:
                     os.makedirs(os.path.join(tmp_dir, str(translation_table)))
-                    aa_gene_file_tmp, nt_gene_file_tmp, gff_file_tmp,processed_prodigal_input,fallback_warning = self.run_prodigal_command(translation_table,
-                                                                                                 tmp_dir, genome_id,
-                                                                                                 genome_file, seqs,
+                    _aa_gene_file_tmp, nt_gene_file_tmp, gff_file_tmp, fallback_warning = self.run_prodigal_command(translation_table,
+                                                                                                 tmp_dir, 
+                                                                                                 genome_id,
+                                                                                                 processed_prodigal_input, 
                                                                                                  total_bases)
 
                     if fallback_warning:
@@ -147,14 +158,13 @@ class Prodigal(object):
                     # determine coding density
                     prodigalParser = ProdigalGeneFeatureParser(gff_file_tmp)
 
-                    codingBases = 0
+                    coding_bases = 0
                     for seq_id, _seq in seqs.items():
-                        codingBases += prodigalParser.coding_bases(seq_id)
+                        coding_bases += prodigalParser.coding_bases(seq_id)
 
+                    coding_density = float(coding_bases) / total_bases
+                    table_coding_density[translation_table] = coding_density * 100
 
-
-                    codingDensity = float(codingBases) / total_bases
-                    table_coding_density[translation_table] = codingDensity * 100
                     # --- NEW LOGIC: Calculate In-Frame UGA/UGG/GLY Counts ---
                     uga, ugg, gly = self._count_codons_of_interest(nt_gene_file_tmp)
                     table_trp_counts[translation_table]['UGA'] = uga
@@ -162,15 +172,14 @@ class Prodigal(object):
                     table_trp_counts[translation_table]['GLY'] = gly
 
                 genome_metadata_dict = {}
-                genome_metadata_dict['gc_percent'] = ksignature.calculate_gc_content(seqs)
+                genome_metadata_dict['gc_percent'] = calculate_gc_content(seqs)
                 genome_metadata_dict['n50'] = N50(seqs)
-                genome_metadata_dict['genome_size'] = sum([len(seq) for seq in seqs.values()])
+                genome_metadata_dict['genome_size'] = total_bases
                 genome_metadata_dict['contig_count'] = len(seqs)
 
                 # we store the coding density in the genome metadata dictionary
                 genome_metadata_dict['coding_density_4'] = table_coding_density[4]
                 genome_metadata_dict['coding_density_11'] = table_coding_density[11]
-
 
                 # create a dataframe to store the genome information with columns in the same order as the classifiers
                 # get columns from the scaler
@@ -210,7 +219,6 @@ class Prodigal(object):
                         tmp_dir,
                         genome_id,
                         genome_file,
-                        seqs,
                         total_bases
                     )
 
@@ -275,6 +283,7 @@ class Prodigal(object):
             metadata=metadata_dict,
             feature_vector=feature_vector
         )
+
         return consumer_data
 
     def _progress(self, processed_items, total_items):
@@ -367,7 +376,7 @@ class Prodigal(object):
         return summary_stats
 
 
-    def run_prodigal_command(self, translation_table, tmp_dir, genome_id, genome_file, seqs,total_bases):
+    def run_prodigal_command(self, translation_table, tmp_dir, genome_id, genome_file, total_bases):
         aa_gene_file_tmp = os.path.join(tmp_dir, str(
             translation_table), genome_id + '_genes.faa')
         nt_gene_file_tmp = os.path.join(tmp_dir, str(
@@ -382,24 +391,6 @@ class Prodigal(object):
         else:
             proc_str = 'single'  # estimate parameters from data
 
-        # If this is a gzipped genome, re-write the uncompressed genome
-        # file to disk
-        prodigal_input = genome_file
-        if genome_file.endswith('.gz'):
-            prodigal_input = os.path.join(
-                tmp_dir, os.path.basename(genome_file[0:-3]) + '.fna')
-            write_fasta(seqs, prodigal_input)
-
-        # there may be ^M character in the input file,
-        # the following code is similar to dos2unix command to remove
-        # those special characters.
-        with open(prodigal_input, 'r') as fh:
-            text = fh.read().replace('\r\n', '\n')
-        processed_prodigal_input = os.path.join(
-            tmp_dir, os.path.basename(prodigal_input))
-        with open(processed_prodigal_input, 'w') as fh:
-            fh.write(text)
-
         args = '-m'
         if self.closed_ends:
             args += ' -c'
@@ -407,8 +398,7 @@ class Prodigal(object):
         cmd = ['prodigal', args, '-p', proc_str, '-q',
                '-f', 'gff', '-g', str(translation_table),
                '-a', aa_gene_file_tmp, '-d', nt_gene_file_tmp,
-               '-i', processed_prodigal_input, '-o', gff_file_tmp]
-
+               '-i', genome_file, '-o', gff_file_tmp]
 
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, encoding='utf-8')
@@ -431,7 +421,8 @@ class Prodigal(object):
             for line in stderr.splitlines():
                 print(line)
             self.logger.warning('This genome is skipped.')
-        return aa_gene_file_tmp, nt_gene_file_tmp, gff_file_tmp ,processed_prodigal_input,fallback_warning
+
+        return aa_gene_file_tmp, nt_gene_file_tmp, gff_file_tmp, fallback_warning
 
     def _count_codons_of_interest(self, gene_file):
         """
@@ -586,134 +577,3 @@ class ProdigalGeneFeatureParser(object):
             end = self.last_coding_base[seq_id]
 
         return np.sum(self.coding_base_masks[seq_id][start:end])
-
-class GenomicSignatures(object):
-    def __init__(self, K, threads =1):
-        self.K = K
-        self.kmerCols, self.kmerToCanonicalIndex = self.makeKmerColNames()
-        self.totalThreads = threads
-
-    def makeKmerColNames(self):
-        """Work out unique kmers."""
-
-        # determine all mers of a given length
-        baseWords = ("A", "C", "G", "T")
-        mers = ["A", "C", "G", "T"]
-        for _ in range(1, self.K):
-            workingList = []
-            for mer in mers:
-                for char in baseWords:
-                    workingList.append(mer + char)
-            mers = workingList
-
-        # pare down kmers based on lexicographical ordering
-        retList = []
-        for mer in mers:
-            if mer not in retList:
-                retList.append(mer)
-
-        sorted(retList)
-
-        # create mapping from kmers to their canonical order position
-        kmerToCanonicalIndex = {}
-        for index, kmer in enumerate(retList):
-            kmerToCanonicalIndex[kmer] = index
-
-        return retList, kmerToCanonicalIndex
-
-    def calculate(self, seqFile,translation_table):
-        """Calculate genomic signature of each sequence."""
-
-        # process each sequence in parallel
-        list_jobs = []
-
-        seqs = read_fasta(seqFile)
-        codon_usage = self.seqSignature(seqs,translation_table)
-        return codon_usage
-
-    def calculate_aa_frequency(self, seqFile,translation_table):
-
-        # Calculating amino acid frequency in gene calling files
-        seqs = read_fasta(seqFile)
-        aa_freq = self.aa_frequency(seqs,translation_table)
-        return aa_freq
-
-
-    def seqSignature(self, seqs,translation_table):
-        sig = [0] * len(self.kmerCols)
-
-        for seqid,seq in seqs.items():
-            tmp_seq = seq.upper()
-
-            numMers = len(tmp_seq) - self.K + 1
-            for i in range(0, numMers):
-                try:
-                    kmerIndex = self.kmerToCanonicalIndex[tmp_seq[i:i + self.K]]
-                    sig[kmerIndex] += 1  # Note: a numpy array would be slow here due to this single element increment
-                except KeyError:
-                    # unknown kmer (e.g., contains a N)
-                    pass
-        # normalize
-        sig = np.array(sig, dtype=float)
-        if np.sum(sig) != 0 :
-            sig /= np.sum(sig)
-        # convert to list
-        sig = list(sig)
-        # multiply by 100
-        sig = [i*100 for i in sig]
-        # convert sig to dictionary
-        sig = dict(zip(self.kmerCols, sig))
-        #we add the suffix of the translation table to the dictionary
-        sig = {k+f'_{translation_table}': v for k, v in sig.items()}
-
-        return sig
-
-    def aa_frequency(self, seqs,tt):
-        standard_amino_acids = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
-        aa_freq = {aa: 0 for aa in standard_amino_acids}
-        for seqid, seq in seqs.items():
-            for aa in seq:
-                if aa in aa_freq:
-                    aa_freq[aa] += 1
-        # normalize
-        total_aa = sum(aa_freq.values())
-        if total_aa != 0 :
-            aa_freq = {aa: freq/total_aa for aa, freq in aa_freq.items()}
-        # multiply by 100 and round to 2 decimal places
-        aa_freq = {aa+f'_{tt}': round(freq*100, 4) for aa, freq in aa_freq.items()}
-        return aa_freq
-
-    def calculate_gc_content(self,seq_dict):
-        """Calculate GC of sequences.
-
-        GC is calculated as (G+C)/(A+C+G+T), where
-        each of these terms represents the number
-        of nucleotides within the sequence. Ambiguous
-        and degenerate bases are ignored. Uracil (U)
-        is treated as a thymine (T).
-
-        Parameters
-        ----------
-        seqs : dict[seq_id] -> seq
-            Sequences indexed by sequence ids.
-
-        Returns
-        -------
-        float
-            GC content of sequences.
-        """
-
-        A = 0
-        C = 0
-        G = 0
-        T = 0
-        for seq in seq_dict.values():
-            a, c, g, t = seq_tk.count_nt(seq)
-
-            A += a
-            C += c
-            G += g
-            T += t
-
-        return (float(G + C)*100) / (A + C + G + T)
-

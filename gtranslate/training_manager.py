@@ -282,7 +282,6 @@ class TrainingManager(object):
         self.logger.info('Cleaning up intermediate files.')
         remove_intermediate_files(out_dir)
 
-
     def fit_models(self, feature_file: str, tt_file: str, out_dir: str, split_data: bool) -> None:
         """Train models based on the feature vector tables."""
 

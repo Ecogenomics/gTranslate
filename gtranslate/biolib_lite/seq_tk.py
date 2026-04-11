@@ -85,6 +85,41 @@ def gc(seq):
     return float(g + c) / (a + c + g + t)
 
 
+def calculate_gc_content(seqs):
+        """Calculate GC of sequences.
+
+        GC is calculated as (G+C)/(A+C+G+T), where
+        each of these terms represents the number
+        of nucleotides within the sequence. Ambiguous
+        and degenerate bases are ignored. Uracil (U)
+        is treated as a thymine (T).
+
+        Parameters
+        ----------
+        seqs : dict[seq_id] -> seq
+            Sequences indexed by sequence ids.
+
+        Returns
+        -------
+        float
+            GC content of sequences.
+        """
+
+        A = 0
+        C = 0
+        G = 0
+        T = 0
+        for seq in seqs.values():
+            a, c, g, t = count_nt(seq)
+
+            A += a
+            C += c
+            G += g
+            T += t
+
+        return (float(G + C)*100) / (A + C + G + T)
+
+
 def unambiguous_nucleotides(seq):
     """Count unambiguous nucleotides in a sequence.
 
