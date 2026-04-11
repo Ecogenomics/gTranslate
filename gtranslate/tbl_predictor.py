@@ -14,11 +14,11 @@
 #    along with this program. If not, see <http://www.gnu.org/licenses/>.     #
 #                                                                             #
 ###############################################################################
+
 import logging
 import os
 
 from gtranslate.config.common import CONFIG
-from gtranslate.biolib_lite.execute import check_dependencies
 from gtranslate.config.output import *
 from gtranslate.external.prodigal import Prodigal
 from gtranslate.files.prodigal.tln_table_summary import TranslationSummaryFile, TranslationSummaryFileRow
@@ -66,7 +66,6 @@ class TablePredictor(object):
             bool
                 True if the process completes successfully.
             """
-            check_dependencies(['prodigal'], exit_on_fail=True)
 
             reports = {}
             self.called_gene_dir = os.path.join(out_dir, DIR_PREDICT_GENES)

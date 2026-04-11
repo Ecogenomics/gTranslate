@@ -14,20 +14,18 @@
 #    along with this program. If not, see <http://www.gnu.org/licenses/>.     #
 #                                                                             #
 ###############################################################################
-import argparse
+
 import logging
-import ntpath
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
-from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Tuple
 
 from tqdm import tqdm
 
+from gtranslate.biolib_lite.execute import check_dependencies
 from gtranslate.biolib_lite.common import remove_extension, check_dir_exists, check_file_exists, make_sure_path_exists
 from gtranslate.exceptions import GTranslateExit
 from gtranslate.files.batchfile import Batchfile
@@ -168,6 +166,8 @@ class OptionsParser(object):
         """
         self.logger.info('Running detect_table')
 
+        check_dependencies(['prodigal'], exit_on_fail=True)
+
         if options.genome_dir:
             check_dir_exists(options.genome_dir)
 
@@ -233,9 +233,11 @@ class OptionsParser(object):
         """
         self.logger.info('Generating feature vectors for training models.')
 
+        check_dependencies(['prodigal'], exit_on_fail=True)
+
         genomes = self._genomes_to_process(options.genome_dir,
-                                                       options.batchfile,
-                                                       options.extension)
+                                            options.batchfile,
+                                            options.extension)
 
         training_manager=TrainingManager(cpus=options.cpus)
         training_manager.build_features(genomes, options.out_dir,options.force)

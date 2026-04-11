@@ -27,10 +27,8 @@ import pandas as pd
 
 from gtranslate.classifiers.classifiers_parameters.classifier_parameters import classifier_configs
 from gtranslate.config.common import CONFIG
-from gtranslate.biolib_lite.execute import check_dependencies
 from gtranslate.config.output import *
 from gtranslate.external.prodigal import Prodigal
-from gtranslate.files.prodigal.tln_table_summary import TranslationSummaryFile, TranslationSummaryFileRow
 from gtranslate.files.featurefile import FeatureFile
 from gtranslate.tools import tqdm_log, symlink_f, remove_intermediate_files
 
@@ -234,8 +232,6 @@ class TrainingManager(object):
 
     def build_features(self, genomes: str, out_dir: str,force:bool) -> None:
         """Generate feature vectors for training models."""
-
-        check_dependencies(['prodigal'], exit_on_fail=True)
 
         reports = {}
         self.called_gene_dir = os.path.join(out_dir, DIR_PREDICT_GENES)
