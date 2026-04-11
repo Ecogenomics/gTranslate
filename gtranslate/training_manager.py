@@ -56,7 +56,7 @@ class TrainingManager(object):
         self.seed = seed if seed is not None else np.random.randint(0, 1000)
 
         # Ground truth from GTDB classifications
-        self.GTDB_TT25 = set(['c__JAEDAM01'])
+        self.GTDB_TT25 = set(['o__Absconditabacterales', 'o__BD1-5'])
         self.GTDB_TT4 = set(['o__Mycoplasmatales', 's__Zinderia insecticola'])
 
         # Eggerthellacea genera using table 4; will need to be updated to names in Parks et al., 2026
@@ -74,8 +74,11 @@ class TrainingManager(object):
         #  - https://pmc.ncbi.nlm.nih.gov/articles/PMC12213064
 
         # Ground truth from NCBI classifications
-        self.NCBI_TT4 = set(['s__Candidatus Hodgkinia cicadicola', 's__Candidatus Nasuia deltocephalinicola', 's__Candidatus Stammera capleta'])
-        self.NCBI_TT4.update(set(['s__Hodgkinia cicadicola', 's__Nasuia deltocephalinicola', 's__Stammera capleta']))
+        self.NCBI_TT4 = set(['s__Candidatus Hodgkinia cicadicola', 's__Candidatus Nasuia deltocephalincola', 's__Candidatus Stammera capleta'])
+        self.NCBI_TT4.update(set(['s__Hodgkinia cicadicola', 's__Nasuia deltocephalincola', 's__Stammera capleta']))
+
+        # species appears to have incorrect spelling at NCBI
+        self.NCBI_TT4.update(set(['s__Candidatus Nasuia deltocephalinicola', 's__Nasuia deltocephalinicola']))
 
         # These species clusters have an unclear ground truth, see https://doi.org/10.1093/gbe/evad164
         self.GTDB_UNRESOLVED = set(['s__Providencia_A siddallii', 's__Providencia_A siddallii_A'])
