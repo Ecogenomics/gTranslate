@@ -198,8 +198,7 @@ class Prodigal(object):
 
                 temp_df['UGG_density'] = table_trp_counts[4]['UGG'] / (table_trp_counts[4]['GLY'])
 
-
-
+                # predict best translation table
                 predictor = TTPredictor(custom_model_path)
 
                 best_translation_table,pred_confidence,pred_warnings,ensemble_preds,feature_vector = predictor.predict_translation_table(temp_df)
@@ -212,7 +211,7 @@ class Prodigal(object):
                     os.makedirs(os.path.join(tmp_dir, str(best_translation_table)), exist_ok=True)
 
                     # Actually run Prodigal to generate the .faa, .fna, and .gff files
-                    _, _, _, _, fallback_warning = self.run_prodigal_command(
+                    _, _, _, fallback_warning = self.run_prodigal_command(
                         best_translation_table,
                         tmp_dir,
                         genome_id,

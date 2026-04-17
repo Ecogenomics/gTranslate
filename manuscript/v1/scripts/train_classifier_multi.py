@@ -205,10 +205,6 @@ class ScalerClassifierMulti(object):
         # 1. Load & Preprocess
         df = self.load_and_preprocess_data()
 
-
-
-
-
         # 2. Prepare Data
         X = df[self.feature_cols]
         labels_raw = df['Ground_truth'].astype(str)

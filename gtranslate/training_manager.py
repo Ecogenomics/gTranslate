@@ -303,7 +303,7 @@ class TrainingManager(object):
         y = le.fit_transform(labels_raw)
 
         # Save LabelEncoder to decode predictions later
-        joblib.dump(le, os.path.join(out_dir, 'label_encoder.pkl'))
+        joblib.dump(le, os.path.join(out_dir, 'label_encoder.pkl.gz'))
 
         # count class distribution
         class_counts = np.bincount(y)

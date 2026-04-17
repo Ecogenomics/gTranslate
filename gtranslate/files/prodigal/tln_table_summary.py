@@ -14,11 +14,11 @@
 #    along with this program. If not, see <http://www.gnu.org/licenses/>.     #
 #                                                                             #
 ###############################################################################
+
 import csv
-import json
 import os
 from dataclasses import dataclass, field, asdict
-from typing import Dict, List, Tuple, Optional, Union
+from typing import Dict, List, Optional
 
 from gtranslate.biolib_lite.common import make_sure_path_exists
 from gtranslate.config.output import PATH_TLN_TABLE_SUMMARY
