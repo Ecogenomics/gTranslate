@@ -240,11 +240,10 @@ class EvaluateMisclassifications(object):
         """Run Codetta for a single genome."""
 
         # TBD: replace with call to Codetta installed system wide
-        inference_file = f'{codetta_dir}/{gid}--inference'
+        inference_file = f'{codetta_dir}/{gid}-inference'
         cmd = f'~/git/codetta/codetta.py {genome_path} --resource_directory ~/git/codetta/resources'
-        cmd += ' -t 3'
         cmd += f' -s {codetta_dir}/{gid}-summary.tsv'
-        cmd += f' --align_output {codetta_dir}/{gid}--align'
+        cmd += f' --align_output {codetta_dir}/{gid}-align'
         cmd += f' --inference_output {inference_file}'
         os.system(cmd)
 
@@ -288,7 +287,7 @@ class EvaluateMisclassifications(object):
                         out_dir: str) -> None:
         """Write file with evidence for or against a UGA reassignment."""
 
-        fout = open('misclassification_evidence.tsv', 'wt')
+        fout = open(os.path.join(out_dir, 'misclassification_evidence.tsv'), 'wt')
         fout.write('Genome ID\tGround truth\tgTranslate prediction\tCheckM prediction\tCodetta prediction\tCodetta columns')
         fout.write('\tgTranslate correct\tCheckM correct\tCodetta correct')
         fout.write('\tTable 11: tRNA-Trp/Gly(tca)\tTable 11: RF2')
@@ -405,7 +404,7 @@ class EvaluateMisclassifications(object):
         self.log.info(f' - identified genomic properties for {len(genomic_properties):,} genomes')
 
         # write file with evidence for or against a UGA reassignment
-        self.logger.info('Writing file with evidence for or against a UGA reassignment.')
+        self.log.info('Writing file with evidence for or against a UGA reassignment.')
         self.write_results(ground_truth,
                            misclassified_gids, 
                            genomic_properties, 
