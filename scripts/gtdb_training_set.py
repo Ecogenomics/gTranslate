@@ -291,12 +291,16 @@ def main():
     parser.add_argument('--gtdb_qc_failed', required=True, help='File indicating genomes that failed standard GTDB QC criteria.')
     parser.add_argument('--ncbi_taxonomy_file', required=True,  help='File indicating standardized NCBI taxonomic classification of each genome.')
     parser.add_argument('--genome_dir_file', required=True,  help='File indicating path to data files for genome assemblies.')
-    parser.add_argument('--out_dir', help='Output directory.')
+    parser.add_argument('--out_dir', required=True, help='Output directory.')
 
     args = parser.parse_args()
 
     # setup logger
-    logger_setup(args.out_dir, "gtdb_training_set.log", "gTranslate", __version__, False, False)
+    logger_setup(args.out_dir, 
+                 __prog_name__.replace('.py', '.log'), 
+                 __prog_name__.replace('.py', ''),
+                 __version__, 
+                 False, False)
 
     # run program
     p = GtdbTrainingSet()
